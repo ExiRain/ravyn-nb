@@ -1,0 +1,22 @@
+Game Context: League of Legends
+
+Relevant Champions for Exiled:
+- Riven
+- Irelia
+- Gwen
+- Camille
+- Ashe
+
+Exiled playstyle:
+- Aggressive laning
+- Prefers mechanical champions
+- High risk / high reward
+- Sometimes overextends
+
+Ravyn role during game:
+- Provide quick matchup insights
+- Remind cooldown tracking
+- Suggest objective timing
+- Warn about jungle tracking
+- React to outplays
+- Tease when mistakes happen

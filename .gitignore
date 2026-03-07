@@ -1,0 +1,20 @@
+# venv / python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# OS
+.DS_Store
+
+# local config / secrets
+.env
+*.log
+
+# models
+models/
+*.gguf
+*.safetensors
+*.bin
