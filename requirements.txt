@@ -4,3 +4,7 @@ pika
 pydantic
 qwen-tts
 soundfile
+phonemizer
+
+kokoro soundfile
+pyrubberband
