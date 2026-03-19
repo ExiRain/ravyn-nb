@@ -43,6 +43,18 @@ previous_env = 0.0
 _phonemizer_backend = None
 _kokoro_pipeline    = None
 
+# =========================================================
+# COMPLETION CALLBACK
+# =========================================================
+_on_complete_callback = None
+
+
+def set_on_complete(callback):
+    """Register a callback invoked when audio finishes streaming.
+    The worker uses this to publish IDLE to ravyn.status."""
+    global _on_complete_callback
+    _on_complete_callback = callback
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -254,6 +266,9 @@ async def push_sentence(ws, audio_bytes: bytes, text: str, is_first: bool, is_la
 async def stream_tts(text: str):
     if not clients:
         print("No websocket clients")
+        # still notify completion so orchestrator doesn't stay stuck on BUSY
+        if _on_complete_callback:
+            _on_complete_callback()
         return
 
     sentences = split_sentences(text)
@@ -275,6 +290,10 @@ async def stream_tts(text: str):
 
         for ws in list(clients):
             await push_sentence(ws, audio_bytes, sentence, is_first, is_last)
+
+    # notify worker that audio is done — triggers IDLE publish
+    if _on_complete_callback:
+        _on_complete_callback()
 
 
 # =========================================================
@@ -299,5 +318,8 @@ def schedule_audio(audio_bytes: bytes, text: str = ""):
     async def _push():
         for ws in list(clients):
             await push_sentence(ws, audio_bytes, text, True, True)
+
+        if _on_complete_callback:
+            _on_complete_callback()
 
     asyncio.run_coroutine_threadsafe(_push(), event_loop)

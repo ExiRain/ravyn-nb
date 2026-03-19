@@ -45,6 +45,7 @@ class Settings:
     RABBIT_VHOST: str = _env("RAVYN_RABBIT_VHOST", "/")
     QUEUE_REQUEST: str = _env("RAVYN_QUEUE_REQUEST", "ravyn.request")
     QUEUE_RESPONSE: str = _env("RAVYN_QUEUE_RESPONSE", "ravyn.response")
+    QUEUE_STATUS: str = _env("RAVYN_QUEUE_STATUS", "ravyn.status")
 
     # --- LLM runner defaults (llama-cli) ---
     LLM_CTX: int = _env_int("RAVYN_LLM_CTX", 4096)
@@ -71,6 +72,7 @@ class Settings:
             RABBIT_VHOST=self.RABBIT_VHOST,
             QUEUE_REQUEST=self.QUEUE_REQUEST,
             QUEUE_RESPONSE=self.QUEUE_RESPONSE,
+            QUEUE_STATUS=self.QUEUE_STATUS,
             LLM_CTX=self.LLM_CTX,
             LLM_TEMP=self.LLM_TEMP,
         )
