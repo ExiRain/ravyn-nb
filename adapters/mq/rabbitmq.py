@@ -3,9 +3,12 @@ import threading
 import pika
 from app.settings import get_settings
 from adapters.audio.stream_api import schedule_tts, set_on_complete
-from adapters.llm.llama_server_client import run_llm
+from adapters.llm.llama_server_client import run_llm, run_llm_simple
+from persona.context_builder import build_messages
+from persona.memory import MemoryManager
 
 settings = get_settings()
+memory = MemoryManager()
 
 
 def start_worker():
@@ -47,7 +50,7 @@ def start_worker():
 
         raw = body.decode()
 
-        # --- Parse JSON or fall back to plain text ---
+        # --- Parse message ---
         try:
             msg = json.loads(raw)
             text     = msg.get("text", "")
@@ -72,22 +75,62 @@ def start_worker():
         set_on_complete(lambda: done_event.set())
 
         if skip_llm:
+            # quote mode — straight to TTS
             print("[worker] Skipping LLM — direct to TTS")
             schedule_tts(text)
+
         else:
-            response = run_llm(text)
-            llm_text = response.get("text", "")
-            print(f"[worker] LLM: {llm_text[:80]}...")
+            # --- Build context-aware prompt ---
+            user = context.get("user", "")
+            user_notes = memory.get_user_notes(user) if user else ""
 
-            schedule_tts(llm_text)
+            messages = build_messages(
+                text=text,
+                source=source,
+                context=context,
+                history=memory.get_history(),
+                general_memory=memory.general_memory,
+                user_memory=user_notes,
+            )
 
+            # --- LLM call ---
+            response = run_llm(messages, thinking=settings.LLM_THINKING)
+            spoken_text = response.get("text", "")
+            mood = response.get("mood")
+            tired = response.get("tired")
+
+            print(f"[worker] Ravyn says: {spoken_text[:80]}...")
+            if mood is not None:
+                print(f"[worker] mood={mood}  tired={tired}")
+
+            # --- Send mood/tired to Godot via WebSocket ---
+            if mood is not None:
+                _send_mood_to_godot(mood, tired)
+
+            # --- TTS ---
+            if spoken_text:
+                schedule_tts(spoken_text)
+
+                # --- Update memory ---
+                memory.add_exchange(
+                    user_msg=text,
+                    assistant_msg=spoken_text,
+                    source=source,
+                    user=user,
+                )
+
+                # --- Compression check (async, non-blocking) ---
+                if memory.needs_compression():
+                    _compress_memory_async(user)
+
+            # --- Send text response back ---
             channel.basic_publish(
                 exchange="",
                 routing_key=settings.QUEUE_RESPONSE,
-                body=llm_text,
+                body=spoken_text,
             )
 
-        # --- Wait for TTS to finish, then publish IDLE ---
+        # --- Wait for TTS, then IDLE ---
         done_event.wait(timeout=30)
         publish_status("IDLE")
 
@@ -99,3 +142,49 @@ def start_worker():
     )
 
     channel.start_consuming()
+
+
+def _send_mood_to_godot(mood: float, tired: float | None):
+    """Send mood/tired values to Godot via the WebSocket clients."""
+    from adapters.audio.stream_api import clients
+    import asyncio
+
+    async def _push():
+        for ws in list(clients):
+            try:
+                await ws.send_text(f"MOOD:{mood}")
+                if tired is not None:
+                    await ws.send_text(f"TIRED:{tired}")
+            except Exception:
+                pass
+
+    from adapters.audio.stream_api import event_loop
+    if event_loop:
+        asyncio.run_coroutine_threadsafe(_push(), event_loop)
+
+
+def _compress_memory_async(active_user: str):
+    """Run memory compression in a background thread so it doesn't block TTS."""
+
+    def _do_compress():
+        try:
+            # compress general memory
+            prompt = memory.get_compression_payload()
+            summary = run_llm_simple(prompt)
+
+            if summary:
+                memory.apply_compression(summary, active_user)
+
+            # update user notes if there was an active user
+            if active_user:
+                note_prompt = memory.get_user_note_compression_prompt(active_user)
+                new_notes = run_llm_simple(note_prompt)
+                if new_notes:
+                    memory.update_user_notes(active_user, new_notes)
+                    print(f"[memory] Updated notes for {active_user}: {new_notes[:60]}...")
+
+        except Exception as e:
+            print(f"[memory] Compression failed: {e}")
+
+    thread = threading.Thread(target=_do_compress, daemon=True, name="memory-compress")
+    thread.start()

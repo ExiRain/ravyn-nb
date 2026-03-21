@@ -1,4 +1,0 @@
-model_path: /home/exiledr/AI/llms/qwen/Qwen2.5-14B-Instruct-Q4_K_M.gguf
-context_size: 4096
-temperature: 0.8
-
