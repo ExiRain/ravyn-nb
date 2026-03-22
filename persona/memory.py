@@ -18,18 +18,20 @@ from app.settings import get_settings
 
 settings = get_settings()
 MEMORY_FILE = settings.DATA_DIR / "memory.json"
-MAX_HISTORY = 5         # exchanges before compression triggers
-MAX_USER_NOTE_LEN = 200 # characters per user note — keeps injection small
+MAX_HISTORY = 5
+MAX_USER_NOTE_LEN = 200
+MAX_OPENING_TRACK = 5   # track last N response openers for anti-repetition
 
 
 class MemoryManager:
 
     def __init__(self):
-        self.history: deque[dict] = deque(maxlen=MAX_HISTORY * 2)  # user+assistant = 2 per exchange
+        self.history: deque[dict] = deque(maxlen=MAX_HISTORY * 2)
         self.exchange_count = 0
         self.general_memory = ""
         self.user_notes: dict[str, str] = {}
-        self.mood_attribution: dict = {}   # who/what caused last drastic mood shift
+        self.mood_attribution: dict = {}
+        self.recent_openers: deque[str] = deque(maxlen=MAX_OPENING_TRACK)
         self._load()
 
     # ---------------------------------------------------------
@@ -43,9 +45,22 @@ class MemoryManager:
         self.history.append({"role": "assistant", "content": assistant_msg})
         self.exchange_count += 1
 
+        # track opening words for anti-repetition
+        words = assistant_msg.strip().split()[:4]
+        if words:
+            opener = " ".join(words)
+            self.recent_openers.append(opener)
+
     def get_history(self) -> list[dict]:
         """Return current history as a list for the messages array."""
         return list(self.history)
+
+    def get_recent_openers(self) -> str:
+        """Return formatted recent openers for anti-repetition injection."""
+        if not self.recent_openers:
+            return ""
+        lines = "\n".join(f'- "{o}"' for o in self.recent_openers)
+        return f"Your recent response openings were:\n{lines}\nStart your next response with a DIFFERENT opening. Vary your first words."
 
     def needs_compression(self) -> bool:
         """True when we've hit the exchange limit and should compress."""

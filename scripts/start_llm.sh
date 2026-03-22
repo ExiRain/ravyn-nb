@@ -40,7 +40,7 @@ if [ ! -f "$MODEL" ]; then
 fi
 
 # --- Config ---
-CTX=4096
+CTX=8192
 PORT=8081
 GPU_LAYERS=99
 

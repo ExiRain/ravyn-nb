@@ -1,4 +1,5 @@
 import asyncio
+import concurrent.futures
 import io
 import re
 import numpy as np
@@ -42,18 +43,6 @@ previous_env = 0.0
 # =========================================================
 _phonemizer_backend = None
 _kokoro_pipeline    = None
-
-# =========================================================
-# COMPLETION CALLBACK
-# =========================================================
-_on_complete_callback = None
-
-
-def set_on_complete(callback):
-    """Register a callback invoked when audio finishes streaming.
-    The worker uses this to publish IDLE to ravyn.status."""
-    global _on_complete_callback
-    _on_complete_callback = callback
 
 
 @app.on_event("startup")
@@ -114,8 +103,6 @@ def split_sentences(text: str) -> list:
             result[-1] += " " + s
         else:
             result.append(s)
-    
-    # hard cap - never more than 3 sentences
     return result[:3]
 
 
@@ -214,8 +201,6 @@ async def push_sentence(ws, audio_bytes: bytes, text: str, is_first: bool, is_la
     if len(audio_bytes) < WAV_HEADER_SIZE:
         return
 
-    # only keep WAV header on first sentence
-    # subsequent sentences strip the header - Godot appends raw PCM only
     if is_first:
         payload     = audio_bytes
         pcm_bytes   = audio_bytes[WAV_HEADER_SIZE:]
@@ -226,7 +211,6 @@ async def push_sentence(ws, audio_bytes: bytes, text: str, is_first: bool, is_la
     pcm_samples       = np.frombuffer(pcm_bytes, dtype=np.int16)
     samples_per_chunk = int((AUDIO_CHUNK_BYTES // 2) * PITCH_FACTOR)
 
-    # pitch corrected duration for phoneme timing
     audio_duration = (len(pcm_samples) / SAMPLE_RATE) * PITCH_FACTOR
     phonemes       = _get_phonemes(text, audio_duration) if text else []
 
@@ -234,19 +218,16 @@ async def push_sentence(ws, audio_bytes: bytes, text: str, is_first: bool, is_la
         if is_first:
             await ws.send_text("START")
 
-        # audio chunks
         for i in range(0, len(payload), AUDIO_CHUNK_BYTES):
             await ws.send_bytes(payload[i:i + AUDIO_CHUNK_BYTES])
             await asyncio.sleep(0)
 
-        # mouth envelope - spaced to match pitch stretched audio
         for i in range(0, len(pcm_samples), samples_per_chunk):
             chunk = pcm_samples[i:i + samples_per_chunk]
             env   = _compute_envelope(chunk)
             await ws.send_text(f"MOUTH:{env}")
             await asyncio.sleep(0)
 
-        # phoneme timeline
         for item in phonemes:
             await ws.send_text(f"PHONEME:{item['p']}:{item['t']}")
             await asyncio.sleep(0)
@@ -263,17 +244,22 @@ async def push_sentence(ws, audio_bytes: bytes, text: str, is_first: bool, is_la
 # STREAMING PIPELINE
 # =========================================================
 
-async def stream_tts(text: str):
+async def _stream_tts_async(text: str):
+    """Internal async TTS pipeline. Returns when audio is fully sent."""
+
     if not clients:
-        print("No websocket clients")
-        # still notify completion so orchestrator doesn't stay stuck on BUSY
-        if _on_complete_callback:
-            _on_complete_callback()
+        print("No websocket clients — skipping TTS")
+        return
+
+    if not text or not text.strip():
+        print("Empty text — skipping TTS")
         return
 
     sentences = split_sentences(text)
     total     = len(sentences)
     print(f"Streaming {total} sentence(s)")
+
+    any_sent = False
 
     for idx, sentence in enumerate(sentences):
         is_first = idx == 0
@@ -286,40 +272,43 @@ async def stream_tts(text: str):
         )
 
         if not audio_bytes:
+            if is_last and any_sent:
+                # still send END if we sent START earlier
+                for ws in list(clients):
+                    try:
+                        await ws.send_text("END")
+                    except Exception:
+                        pass
             continue
 
+        any_sent = True
         for ws in list(clients):
             await push_sentence(ws, audio_bytes, sentence, is_first, is_last)
 
-    # notify worker that audio is done — triggers IDLE publish
-    if _on_complete_callback:
-        _on_complete_callback()
+    if not any_sent:
+        print("No audio generated for any sentence")
 
 
 # =========================================================
-# PUBLIC API
+# PUBLIC API — Future-based, no global callback
 # =========================================================
 
-def schedule_tts(text: str):
-    """Main entry point - pass LLM response text here."""
+def schedule_tts(text: str) -> concurrent.futures.Future:
+    """
+    Schedule TTS and return a Future that resolves when audio is done.
+    The worker waits on this future instead of a callback.
+    """
     if event_loop is None:
         print("ERROR: event loop not ready")
-        return
+        f = concurrent.futures.Future()
+        f.set_result(None)
+        return f
 
-    asyncio.run_coroutine_threadsafe(stream_tts(text), event_loop)
+    future = asyncio.run_coroutine_threadsafe(_stream_tts_async(text), event_loop)
+    return future
 
 
-def schedule_audio(audio_bytes: bytes, text: str = ""):
-    """Legacy entry point - kept for backwards compatibility."""
-    if event_loop is None:
-        print("ERROR: event loop not ready")
-        return
-
-    async def _push():
-        for ws in list(clients):
-            await push_sentence(ws, audio_bytes, text, True, True)
-
-        if _on_complete_callback:
-            _on_complete_callback()
-
-    asyncio.run_coroutine_threadsafe(_push(), event_loop)
+# legacy — kept for compatibility
+def set_on_complete(callback):
+    """Deprecated — use the Future returned by schedule_tts() instead."""
+    pass
