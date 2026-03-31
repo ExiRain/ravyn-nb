@@ -108,13 +108,21 @@ def _frame_signal(text: str, source: str, context: dict, user_memory: str) -> st
         MILESTONE_EVENTS = {"GameStart", "GameEnd"}
         ROAST_EVENTS = {"TeamfightMissed"}
 
-        # deaths — routed by death count
+        # deaths — routed by death count, short_mode for interrupts
         if event_type == "MyDeath":
             death_count = context.get("death_count", 1)
+            short = context.get("short_mode", False)
+
             if death_count >= 5:
-                return GAME_EVENT_DEATH_ROAST.format(event=text, death_count=death_count)
+                template = GAME_EVENT_DEATH_ROAST.format(
+                    event=text, death_count=death_count)
             else:
-                return GAME_EVENT_DEATH.format(event=text)
+                template = GAME_EVENT_DEATH.format(event=text)
+
+            if short:
+                template += "\nIMPORTANT: Exiled is currently talking. Keep this to ONE short punchy sentence. Maximum 6 words."
+
+            return template
 
         if event_type in SERIOUS_EVENTS:
             return GAME_EVENT_SERIOUS.format(event=text)
