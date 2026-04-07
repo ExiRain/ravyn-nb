@@ -58,7 +58,7 @@ def start_worker():
     credentials = pika.PlainCredentials(settings.RABBIT_USER, settings.RABBIT_PASS)
     connection = pika.BlockingConnection(
         pika.ConnectionParameters(
-            host=settings.RABBIT_HOST, port=settings.RABBIT_PORT,
+            host=settings.RABBIT_HOST, port=settings.RABBIT_PORT,heartbeat=600,
             virtual_host=settings.RABBIT_VHOST, credentials=credentials))
 
     channel = connection.channel()
