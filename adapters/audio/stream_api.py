@@ -245,7 +245,7 @@ async def push_sentence(ws, audio_bytes: bytes, text: str, is_first: bool, is_la
 # =========================================================
 
 async def _stream_tts_async(text: str):
-    """Internal async TTS pipeline. Returns when audio is fully sent."""
+    """Internal async TTS pipeline. Returns when audio is fully sent AND played."""
 
     if not clients:
         print("No websocket clients — skipping TTS")
@@ -260,6 +260,7 @@ async def _stream_tts_async(text: str):
     print(f"Streaming {total} sentence(s)")
 
     any_sent = False
+    total_duration = 0.0
 
     for idx, sentence in enumerate(sentences):
         is_first = idx == 0
@@ -273,7 +274,6 @@ async def _stream_tts_async(text: str):
 
         if not audio_bytes:
             if is_last and any_sent:
-                # still send END if we sent START earlier
                 for ws in list(clients):
                     try:
                         await ws.send_text("END")
@@ -281,9 +281,19 @@ async def _stream_tts_async(text: str):
                         pass
             continue
 
+        # calculate duration for this sentence
+        pcm_bytes = audio_bytes[WAV_HEADER_SIZE:] if any_sent else audio_bytes[WAV_HEADER_SIZE:]
+        pcm_samples = np.frombuffer(pcm_bytes, dtype=np.int16)
+        total_duration += (len(pcm_samples) / SAMPLE_RATE) * PITCH_FACTOR
+
         any_sent = True
         for ws in list(clients):
             await push_sentence(ws, audio_bytes, sentence, is_first, is_last)
+
+    # wait for Godot to finish playing before returning
+    if any_sent and total_duration > 0:
+        print(f"  Waiting {total_duration:.1f}s for playback")
+        await asyncio.sleep(total_duration)
 
     if not any_sent:
         print("No audio generated for any sentence")

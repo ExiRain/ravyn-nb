@@ -95,6 +95,7 @@ def run_llm(messages: list[dict], thinking: bool = False, _retry: int = 0) -> di
         "max_tokens": settings.LLM_MAX_TOKENS,
         "top_p": 0.95,
         "top_k": 20,
+        "chat_template_kwargs": {"enable_thinking": False},
         "presence_penalty": 1.5,
         "frequency_penalty": 0.3,
     }
@@ -104,9 +105,6 @@ def run_llm(messages: list[dict], thinking: bool = False, _retry: int = 0) -> di
         response.raise_for_status()
         data = response.json()
         raw_text = data["choices"][0]["message"]["content"].strip()
-        # fallback: if content is empty, check reasoning_content
-        if not raw_text:
-            raw_text = data["choices"][0]["message"].get("reasoning_content", "").strip()
     except Exception as e:
         print(f"[{_ts()}][llm] Error: {e}")
         return {"text": "", "raw": "", "mood": None, "tired": None}

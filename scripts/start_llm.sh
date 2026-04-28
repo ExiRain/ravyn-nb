@@ -15,7 +15,7 @@ cd "$(dirname "$0")/.."
 LLAMA_SERVER="/home/exiledr/AI/bin/llama-cli/build/bin/llama-server"
 
 # --- Model selection ---
-MODEL_PRIMARY="models/llm/Qwen3.5-9B-Claude-4.6-OS-AV-H-UNCENSORED-THINK-D_AU-Q4_K_M-imat.gguf"
+MODEL_PRIMARY="models/llm/Qwen3.5-9B-Claude-4.6-OS-AV-H-UNCENSORED-THINK-D_AU-Q4_K_S-imat.gguf"
 MODEL_FALLBACK="models/llm/Qwen3.5-9B-Claude-4.6-OS-AV-H-UNCENSORED-THINK-D_AU-Q4_K_S-imat.gguf"
 
 MODEL="$MODEL_PRIMARY"
