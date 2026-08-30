@@ -4,7 +4,6 @@ import threading
 import time
 import pika
 from app.settings import get_settings
-from adapters.audio.stream_api import schedule_tts
 from adapters.llm.llama_server_client import run_llm, run_llm_simple
 from persona.context_builder import build_messages
 from persona.memory import MemoryManager
@@ -54,26 +53,29 @@ def _gate_fufu(text: str, source: str) -> str:
 
 
 def start_worker():
+    """
+    LLM worker. Consumes ravyn.request, produces ravyn.response.
+
+    This service does NOT speak. The PC owns TTS, audio streaming and the
+    busy/idle state — see ravyn-lynx-p/services/response_listener.py.
+
+    Contract: exactly ONE message is published to ravyn.response for every
+    message consumed from ravyn.request, including failures and empty LLM
+    output. The PC clears its busy flag on that response, so dropping one
+    deadlocks the dispatcher until its watchdog fires.
+    """
 
     credentials = pika.PlainCredentials(settings.RABBIT_USER, settings.RABBIT_PASS)
     connection = pika.BlockingConnection(
         pika.ConnectionParameters(
-            host=settings.RABBIT_HOST, port=settings.RABBIT_PORT,heartbeat=600,
+            host=settings.RABBIT_HOST, port=settings.RABBIT_PORT, heartbeat=600,
             virtual_host=settings.RABBIT_VHOST, credentials=credentials))
 
     channel = connection.channel()
     channel.queue_declare(queue=settings.QUEUE_REQUEST)
     channel.queue_declare(queue=settings.QUEUE_RESPONSE)
-    channel.queue_declare(queue=settings.QUEUE_STATUS)
 
     print("RabbitMQ connected — waiting for messages")
-
-    def publish_status(status: str):
-        try:
-            channel.basic_publish(exchange="", routing_key=settings.QUEUE_STATUS, body=status)
-            print(f"[{_ts()}][status] {status}")
-        except Exception as e:
-            print(f"[{_ts()}][status] Failed: {e}")
 
     def callback(ch, method, properties, body):
         raw = body.decode()
@@ -91,126 +93,76 @@ def start_worker():
         print(f"[{_ts()}][worker] source={source} mode={mode} skip_llm={skip_llm}")
         print(f"[{_ts()}][worker] text: {text[:80]}")
 
-        publish_status("BUSY")
-
         spoken_text = ""
+        mood = None
+        tired = None
 
-        if skip_llm:
-            print(f"[{_ts()}][worker] Direct to TTS")
-            spoken_text = _clean_for_tts(text)
-        else:
-            user = context.get("user", "")
-            user_notes = memory.get_user_notes(user) if user else ""
+        try:
+            if skip_llm:
+                # quote mode — canned line, straight through to the PC's TTS
+                print(f"[{_ts()}][worker] Quote mode — no LLM")
+                spoken_text = _clean_for_tts(text)
+            else:
+                user = context.get("user", "")
+                user_notes = memory.get_user_notes(user) if user else ""
 
-            messages = build_messages(
-                text=text, source=source, context=context,
-                history=memory.get_history(),
-                general_memory=memory.general_memory,
-                user_memory=user_notes,
-                recent_openers=memory.get_recent_openers(),
-            )
+                messages = build_messages(
+                    text=text, source=source, context=context,
+                    history=memory.get_history(),
+                    general_memory=memory.general_memory,
+                    user_memory=user_notes,
+                    recent_openers=memory.get_recent_openers(),
+                )
 
-            response = run_llm(messages, thinking=settings.LLM_THINKING)
-            spoken_text = response.get("text", "")
-            mood = response.get("mood")
-            tired = response.get("tired")
+                response = run_llm(messages, thinking=settings.LLM_THINKING)
+                spoken_text = response.get("text", "")
+                mood = response.get("mood")
+                tired = response.get("tired")
 
-            # mood spike from game context
-            mood_spike = context.get("mood_spike")
-            if mood_spike is not None and mood is None:
-                mood = mood_spike
+                # mood spike from game context
+                mood_spike = context.get("mood_spike")
+                if mood_spike is not None and mood is None:
+                    mood = mood_spike
 
-            # face prep for subs/follows
-            event_type = context.get("event_type", "")
-            if event_type in ("sub", "follow"):
-                _send_face_to_godot("SURPRISED")
+                print(f"[{_ts()}][worker] Ravyn: {spoken_text[:80]}")
 
-            print(f"[{_ts()}][worker] Ravyn: {spoken_text[:80]}")
+                spoken_text = _gate_fufu(spoken_text, source)
+                spoken_text = _strip_banned_openers(spoken_text)
 
-            # fufu gating
-            spoken_text = _gate_fufu(spoken_text, source)
+                # update memory
+                if spoken_text:
+                    memory.add_exchange(
+                        user_msg=text, assistant_msg=spoken_text,
+                        source=source, user=user)
 
-            # strip banned openers (tch)
-            spoken_text = _strip_banned_openers(spoken_text)
+                    if memory.needs_compression():
+                        _compress_memory_async(user)
 
-            # mood to Godot
-            if mood is not None:
-                _send_mood_to_godot(mood, tired)
+        except Exception as e:
+            # still fall through to publish — the PC must always get a reply
+            print(f"[{_ts()}][worker] ERROR: {e}")
 
-            # update memory
-            if spoken_text:
-                memory.add_exchange(
-                    user_msg=text, assistant_msg=spoken_text,
-                    source=source, user=user)
+        response_payload = json.dumps({
+            "text": spoken_text,
+            "mood": mood,
+            "tired": tired,
+            "source": source,
+            "event_type": context.get("event_type", ""),
+            "lang": context.get("lang", "en"),
+        })
 
-                if memory.needs_compression():
-                    _compress_memory_async(user)
-
-            # response JSON back to queue (PC TTS reads this)
-            response_payload = json.dumps({
-                "text": spoken_text,
-                "mood": mood,
-                "tired": tired,
-                "source": source,
-                "event_type": context.get("event_type", ""),
-            })
+        try:
             channel.basic_publish(
                 exchange="", routing_key=settings.QUEUE_RESPONSE,
                 body=response_payload)
+            print(f"[{_ts()}][worker] Published response ({len(spoken_text)} chars)")
+        except Exception as e:
+            print(f"[{_ts()}][worker] Publish failed: {e}")
 
-        # --- TTS with Future-based waiting ---
-        if spoken_text:
-            tts_text = _clean_for_tts(spoken_text)
-            if tts_text:
-                print(f"[{_ts()}][worker] TTS start")
-                future = schedule_tts(tts_text)
-                try:
-                    future.result(timeout=20)
-                    print(f"[{_ts()}][worker] TTS done")
-                except Exception as e:
-                    print(f"[{_ts()}][worker] TTS wait error: {e}")
-            else:
-                print(f"[{_ts()}][worker] Text empty after cleanup — skipping TTS")
-        else:
-            print(f"[{_ts()}][worker] No spoken text — skipping TTS")
-
-        publish_status("IDLE")
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
     channel.basic_consume(queue=settings.QUEUE_REQUEST, on_message_callback=callback)
     channel.start_consuming()
-
-
-def _send_mood_to_godot(mood: float, tired: float | None):
-    from adapters.audio.stream_api import clients, event_loop
-    import asyncio
-
-    async def _push():
-        for ws in list(clients):
-            try:
-                await ws.send_text(f"MOOD:{mood}")
-                if tired is not None:
-                    await ws.send_text(f"TIRED:{tired}")
-            except Exception:
-                pass
-
-    if event_loop:
-        asyncio.run_coroutine_threadsafe(_push(), event_loop)
-
-
-def _send_face_to_godot(face: str):
-    from adapters.audio.stream_api import clients, event_loop
-    import asyncio
-
-    async def _push():
-        for ws in list(clients):
-            try:
-                await ws.send_text(f"FACE:{face}")
-            except Exception:
-                pass
-
-    if event_loop:
-        asyncio.run_coroutine_threadsafe(_push(), event_loop)
 
 
 def _compress_memory_async(active_user: str):
