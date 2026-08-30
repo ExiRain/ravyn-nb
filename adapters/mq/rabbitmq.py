@@ -26,6 +26,54 @@ def _clean_for_tts(text: str) -> str:
     return text
 
 
+# Third-person narration about herself: "Ravyn tilts her head...".
+# Matched by NAME only. "she/he + verb" is deliberately not matched — she talks
+# about other people that way constantly ("he plays jungle like a bot"), so a
+# pronoun rule would eat real speech.
+_NARRATION_SELF = re.compile(r'\bRavyn\s+\w+s\b', re.IGNORECASE)
+
+# Dialogue attribution after a closing quote: '"NewViewer_123," she murmurs
+# to no one.' The quote-comma-pronoun-verb shape only occurs in prose, so this
+# is safe where a bare pronoun rule would not be.
+# The comma usually sits INSIDE the closing quote ('..._123," she murmurs'),
+# so it has to be consumed here or it survives as a dangling 'NewViewer_123,.'
+_DIALOGUE_TAG = re.compile(
+    r',?\s*(["\u201c\u201d])\s*,?\s*(?:she|he|they)\s+\w+s\b[^.!?]*([.!?])',
+    re.IGNORECASE)
+
+_QUOTE_CHARS = '"\u201c\u201d'
+
+
+def _strip_narration(text: str) -> str:
+    """
+    Remove prose narration so she speaks instead of describing herself.
+
+    The model writes fiction ABOUT Ravyn rather than being her — "Ravyn tilts
+    her head at the chat notification", '"NewViewer_123," she murmurs' — and
+    TTS reads every word of it aloud. The system prompt forbids this and the
+    model does it anyway, so it gets removed here.
+
+    Returns "" when the whole response was narration. Saying nothing is better
+    than narrating; the caller logs it so the rate is visible.
+    """
+    if not text:
+        return text
+
+    # strip the attribution, keep the spoken part
+    text = _DIALOGUE_TAG.sub(r'\1\2', text)
+
+    # drop whole sentences that describe her in third person
+    kept = [s.strip() for s in re.split(r'(?<=[.!?])\s+', text)
+            if s.strip() and not _NARRATION_SELF.search(s)]
+    text = " ".join(kept)
+
+    # she never puts quotation marks around her own words
+    for q in _QUOTE_CHARS:
+        text = text.replace(q, '')
+
+    return re.sub(r'\s+', ' ', text).strip()
+
+
 def _strip_banned_openers(text: str) -> str:
     """Strip 'tch' from the start of responses. Nuclear option."""
     # matches: "tch...", "tch,", "tch ", "tch..." at the start
@@ -128,6 +176,14 @@ def start_worker():
 
                 spoken_text = _gate_fufu(spoken_text, source)
                 spoken_text = _strip_banned_openers(spoken_text)
+
+                before = spoken_text
+                spoken_text = _strip_narration(spoken_text)
+                if spoken_text != before:
+                    if spoken_text:
+                        print(f"[{_ts()}][worker] Stripped narration -> {spoken_text[:60]}")
+                    else:
+                        print(f"[{_ts()}][worker] ALL narration, saying nothing: {before[:80]}")
 
                 # update memory
                 if spoken_text:
