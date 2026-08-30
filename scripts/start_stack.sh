@@ -2,6 +2,10 @@
 # =========================================================
 # Ravyn runtime stack — launches all services in tmux
 #
+# Notebook runs LLM + worker only. TTS and the Godot audio
+# WebSocket live on the PC (ravyn-lynx-p), which keeps the
+# whole 4070 free for llama-server.
+#
 # Usage:
 #   ./scripts/start_stack.sh              # default
 #   ./scripts/start_stack.sh fallback     # use Q4_K_S model
@@ -35,21 +39,10 @@ tmux send-keys -t $SESSION:0.2 \
 sudo systemctl status rabbitmq-server" C-m
 
 # ----- split bottom right : MONITOR -----
-# tmux select-pane -t $SESSION:0.1
-# tmux split-window -v
-
-# ----- split bottom right : STREAM API (TTS + Godot WebSocket) -----
 tmux select-pane -t $SESSION:0.1
 tmux split-window -v
 
-tmux send-keys -t $SESSION:0.3 \
-"echo 'Waiting 10s for worker...'; sleep 10; \
-echo 'Starting Stream API (Kokoro TTS)'; \
-cd ~/ravyn-lynx && source venv/bin/activate && \
-uvicorn adapters.audio.stream_api:app --host 0.0.0.0 --port 9000" C-m
-
-tmux send-keys -t $SESSION:0.3 \
-"htop" C-m
+tmux send-keys -t $SESSION:0.3 "nvidia-smi; htop" C-m
 
 # Arrange panes
 tmux select-layout -t $SESSION tiled

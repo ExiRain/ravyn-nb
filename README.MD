@@ -35,7 +35,7 @@ The default layout is:
 +-------------------+-------------------+
 Pane	Service	Purpose
 LLM	llama.cpp server	Runs the language model
-WORKER	Python service	Handles Rabbit messages, LLM calls, and TTS
+WORKER	Python service	Handles Rabbit messages and LLM calls
 RABBIT	RabbitMQ	Message queue backend
 MONITOR	htop	System monitoring
 tmux Controls
@@ -104,19 +104,26 @@ Service Overview
 
 The runtime pipeline currently follows this flow:
 
-PC client
-   ↓
+PC orchestrator
+   ↓  ravyn.request
 RabbitMQ
    ↓
 Notebook Worker
    ↓
 LLM (llama.cpp)
+   ↓  ravyn.response
+RabbitMQ
    ↓
-TTS (Qwen-TTS)
-   ↓
-Audio Stream
+PC: TTS → audio → Godot
 
-The notebook acts as the AI runtime host, while the PC acts as the control and playback client.
+The notebook is an LLM service only. It does not speak and does not talk to
+Godot — TTS, audio streaming and Ravyn's busy/idle state all live on the PC
+(ravyn-lynx-p). Nothing here loads a speech model, which keeps the whole
+4070 available to llama-server.
+
+The worker publishes exactly one message to ravyn.response for every message
+it consumes from ravyn.request, including empty LLM output and failures. The
+PC clears its busy flag on that reply, so dropping one stalls the dispatcher.
 
 Monitoring
 
@@ -159,10 +166,7 @@ automatic service restart
 
 Start LLM:
 
-/home/exiledr/AI/bin/llama-cli/llama-server \
--m ~/ravyn-lynx/models/llm/Qwen2.5-14B-Instruct-Q4_K_M.gguf \
--c 4096 \
---port 8081
+./scripts/start_llm.sh
 
 Start worker:
 
