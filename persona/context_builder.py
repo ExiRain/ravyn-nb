@@ -21,6 +21,13 @@ def build_messages(
 
     system_parts = [SYSTEM_PROMPT]
 
+    lang = context.get("lang", "en")
+    if lang == "ru":
+        system_parts.append("LANGUAGE: Always respond in Russian. All your speech must be in Russian.")
+    elif lang == "multilang":
+        system_parts.append("LANGUAGE: Respond in the same language the user writes in.")
+
+
     viewer_count = context.get("viewer_count", "unknown")
     stream_mood = context.get("stream_mood", "neutral")
     game_active = context.get("game_active", False)

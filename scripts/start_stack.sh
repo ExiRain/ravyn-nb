@@ -35,8 +35,18 @@ tmux send-keys -t $SESSION:0.2 \
 sudo systemctl status rabbitmq-server" C-m
 
 # ----- split bottom right : MONITOR -----
+# tmux select-pane -t $SESSION:0.1
+# tmux split-window -v
+
+# ----- split bottom right : STREAM API (TTS + Godot WebSocket) -----
 tmux select-pane -t $SESSION:0.1
 tmux split-window -v
+
+tmux send-keys -t $SESSION:0.3 \
+"echo 'Waiting 10s for worker...'; sleep 10; \
+echo 'Starting Stream API (Kokoro TTS)'; \
+cd ~/ravyn-lynx && source venv/bin/activate && \
+uvicorn adapters.audio.stream_api:app --host 0.0.0.0 --port 9000" C-m
 
 tmux send-keys -t $SESSION:0.3 \
 "htop" C-m
