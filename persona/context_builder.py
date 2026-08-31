@@ -108,6 +108,12 @@ def _frame_signal(text: str, source: str, context: dict, user_memory: str) -> st
     # The text already contains the quote seed from lol_game.py.
     # Templates tell the LLM to use it as inspiration, not verbatim.
     if source == "game":
+        champion = context.get("player_champion", "")
+        identity = GAME_IDENTITY.format(champion=champion or "his champion")
+
+        def framed(body: str) -> str:
+            return f"{identity}\n\n{body}"
+
         SERIOUS_EVENTS = {"MyKill", "MyMultikill", "MyAssist",
                           "BaronKill", "Ace", "InhibKilled"}
         DISMISSIVE_EVENTS = {"DragonKill", "HeraldKill", "TurretKilled",
@@ -129,17 +135,17 @@ def _frame_signal(text: str, source: str, context: dict, user_memory: str) -> st
             if short:
                 template += "\nIMPORTANT: Exiled is currently talking. Keep this to ONE short punchy sentence. Maximum 6 words."
 
-            return template
+            return framed(template)
 
         if event_type in SERIOUS_EVENTS:
-            return GAME_EVENT_SERIOUS.format(event=text)
+            return framed(GAME_EVENT_SERIOUS.format(event=text))
         elif event_type in ROAST_EVENTS:
-            return GAME_EVENT_ROAST.format(event=text)
+            return framed(GAME_EVENT_ROAST.format(event=text))
         elif event_type in DISMISSIVE_EVENTS:
-            return GAME_EVENT_DISMISSIVE.format(event=text)
+            return framed(GAME_EVENT_DISMISSIVE.format(event=text))
         elif event_type in MILESTONE_EVENTS:
-            return GAME_EVENT_MILESTONE.format(event=text)
-        return GAME_EVENT_SERIOUS.format(event=text)
+            return framed(GAME_EVENT_MILESTONE.format(event=text))
+        return framed(GAME_EVENT_SERIOUS.format(event=text))
 
     # --- Silence filler ---
     if source == "silence_filler" and trigger == "silence_timer":
