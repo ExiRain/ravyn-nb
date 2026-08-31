@@ -76,10 +76,14 @@ def _strip_narration(text: str) -> str:
 
 # "tch" is hers, but it only lands when it is rare. Raise this to hear it
 # less, lower it to hear it more; 0 lets every one through.
-TCH_COOLDOWN = 12
+TCH_COOLDOWN = 25
 
 _responses_since_tch = TCH_COOLDOWN     # let the first one through
-_TCH = re.compile(r'\btch\b[\s,.…!?—-]*', re.IGNORECASE)
+
+# Every spelling the model reaches for. A plain \btch\b misses "tchk" — the
+# 'k' kills the word boundary — which is how it survived the first version of
+# this gate and stayed the most audible thing she said.
+_TCH = re.compile(r'\b(?:t+c*h+k*|t+s+k+)\b[\s,.…!?—–-]*', re.IGNORECASE)
 
 
 def _gate_tch(text: str) -> str:
