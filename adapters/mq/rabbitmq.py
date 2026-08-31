@@ -59,6 +59,8 @@ def _strip_narration(text: str) -> str:
     if not text:
         return text
 
+    before_sentences = text
+
     # strip the attribution, keep the spoken part
     text = _DIALOGUE_TAG.sub(r'\1\2', text)
 
@@ -67,19 +69,36 @@ def _strip_narration(text: str) -> str:
             if s.strip() and not _NARRATION_SELF.search(s)]
     text = " ".join(kept)
 
+    # Compare like with like: quotes and whitespace are normalised on both
+    # sides, so the flag reports only that actual narration was dropped —
+    # otherwise every scare-quoted word logs as narration.
+    def _norm(t: str) -> str:
+        return re.sub(r'\s+', ' ', _unquote(t)).strip()
+
+    narration_removed = _norm(text) != _norm(before_sentences)
+
     # she never puts quotation marks around her own words
+    text = _unquote(text)
+
+    return re.sub(r'\s+', ' ', text).strip(), narration_removed
+
+
+def _unquote(text: str) -> str:
     for q in _QUOTE_CHARS:
         text = text.replace(q, '')
-
-    return re.sub(r'\s+', ' ', text).strip()
+    return text
 
 
 # "tch" is hers, but it only lands when it is rare. Raise this to hear it
 # less, lower it to hear it more; 0 lets every one through.
-TCH_COOLDOWN = 12
+TCH_COOLDOWN = 25
 
 _responses_since_tch = TCH_COOLDOWN     # let the first one through
-_TCH = re.compile(r'\btch\b[\s,.…!?—-]*', re.IGNORECASE)
+
+# Every spelling the model reaches for. A plain \btch\b misses "tchk" — the
+# 'k' kills the word boundary — which is how it survived the first version of
+# this gate and stayed the most audible thing she said.
+_TCH = re.compile(r'\b(?:t+c*h+k*|t+s+k+)\b[\s,.…!?—–-]*', re.IGNORECASE)
 
 
 def _gate_tch(text: str) -> str:
@@ -212,8 +231,8 @@ def start_worker():
                 spoken_text = _gate_tch(spoken_text)
 
                 before = spoken_text
-                spoken_text = _strip_narration(spoken_text)
-                if spoken_text != before:
+                spoken_text, narrated = _strip_narration(spoken_text)
+                if narrated:
                     if spoken_text:
                         print(f"[{_ts()}][worker] Stripped narration -> {spoken_text[:60]}")
                     else:
