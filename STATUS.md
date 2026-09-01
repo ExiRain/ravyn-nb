@@ -24,6 +24,13 @@ several times and the current arrangement is settled.
 empty LLM output and on exceptions. The PC clears its busy flag on that reply,
 so a dropped one stalls the dispatcher until its 90s watchdog fires.
 
+The PC may now **synthesise a response and then never speak it** — the voice
+gate rework asks the VAD again after TTS, and drops the line if the streamer is
+still talking (`ravyn-lynx-p/STATUS.md` §6). Nothing changes on this side: the
+contract is unchanged, the response is still consumed, and busy still clears.
+It is worth knowing only because a line can now appear in the worker log and
+never be heard, which is correct rather than a lost message.
+
 ## Hardware
 
 RTX 4070, **8188MiB, ~8.1GB free** (13MiB at idle). Earlier planning assumed
