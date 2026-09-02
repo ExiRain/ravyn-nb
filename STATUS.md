@@ -117,6 +117,32 @@ whose death it was, and roasted him like a stranger — `player_name` was in the
 context but no template read it, and `USER_MEMORY` keys off `context["user"]`
 which game events never set.
 
+**Game events also carry a SITUATION block and an ANGLE**, both built on the PC
+(`orchestrator/game_state.py`, `orchestrator/game_angles.py`). The situation is
+measured fact — minute, his line, kill totals, drake and tower counts, both team
+comps. The angle is a per-event instruction chosen from that state, and when it
+is present it **replaces** the fixed per-type template: keeping both would put
+two different directions in one prompt, and the fixed one is exactly what made
+every ally death sound the same.
+
+A third optional block, `player_notes`, carries what Exiled told her about his
+own account — roles, champions, matchups, from `ravyn-lynx-p/data/champions.json`.
+It is a **different category** from the situation and carries its own heading
+saying so: the situation is measured, these are his claims. Without that label
+the situation block's "do not state anything beyond these" would forbid the very
+lines the file exists to produce, and blending the two would let her present his
+opinion as something the game told her — the exact §7 failure.
+
+All three are optional. `context_builder` falls back to the old
+SERIOUS/DISMISSIVE/MILESTONE routing when they are absent, so an older PC client
+or a game the API could not read still works.
+
+The one deliberate exception is death #5 and beyond: that stays on
+`GAME_EVENT_DEATH_ROAST`, because at that point the count *is* the story and she
+should say the same kind of thing every time.
+
+Why any of this exists: `ravyn-lynx-p/STATUS.md` §7, "Why she felt repetitive".
+
 `context_builder.py` reads `context["lang"]` — `"ru"` forces Russian,
 `"multilang"` mirrors the speaker. The PC decides which; see the full document.
 
