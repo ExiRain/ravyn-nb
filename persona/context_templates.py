@@ -61,6 +61,14 @@ Refer to champions by champion name, never by summoner name."""
 # identical ally-death prompts in a game and fifteen different ones.
 GAME_SITUATION = """{situation}"""
 
+# His own notes about his account — roles, champions, matchups — from
+# ravyn-lynx-p/data/champions.json. A DIFFERENT category from the situation
+# block: that is measured, this is asserted by him. The block carries its own
+# heading saying so, because STATUS.md §7 forbids her asserting anything about
+# League she was not told or shown, and without the label the situation block's
+# "do not state anything beyond these" would silently forbid these lines too.
+GAME_PLAYER_NOTES = """{player_notes}"""
+
 # The ANGLE is chosen per event from that state, and is what actually varies.
 # Before it existed, five of the most frequent event types in any game shared
 # one "be dismissive" instruction, so no amount of seed variety survived — see
@@ -69,7 +77,7 @@ GAME_ANGLE = """YOUR ANGLE THIS TIME: {angle}"""
 
 # Rules that hold for every game event, whatever the angle says. Kept separate
 # so the angle never has to restate them and can spend its words on the read.
-GAME_EVENT_RULES = """React to THIS event and nothing else. Do not mention turrets, dragons, kills or any other game element unless the event or the situation above actually names it. Never state anything about the game that is not in front of you — no matchup opinions, no predictions about what their team will do.
+GAME_EVENT_RULES = """React to THIS event and nothing else. Do not mention turrets, dragons, kills or any other game element unless the event or the situation above actually names it. Never state anything about the game that is not in front of you — no matchup opinions of your own, no predictions about what their team will do. Anything Exiled has told you above is his to claim and yours to repeat; everything beyond it is off limits.
 
 Use the seed text as a starting point but rephrase it in your own words; never repeat it verbatim. One or two sentences max. No fufu."""
 

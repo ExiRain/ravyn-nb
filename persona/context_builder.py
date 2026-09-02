@@ -116,11 +116,14 @@ def _frame_signal(text: str, source: str, context: dict, user_memory: str) -> st
         # degrades to exactly the previous behaviour instead of breaking.
         situation = context.get("situation", "")
         angle = context.get("angle", "")
+        player_notes = context.get("player_notes", "")
 
         def framed(body: str) -> str:
             parts = [identity]
             if situation:
                 parts.append(GAME_SITUATION.format(situation=situation))
+            if player_notes:
+                parts.append(GAME_PLAYER_NOTES.format(player_notes=player_notes))
             parts.append(body)
             return "\n\n".join(parts)
 

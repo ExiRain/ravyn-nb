@@ -125,7 +125,15 @@ is present it **replaces** the fixed per-type template: keeping both would put
 two different directions in one prompt, and the fixed one is exactly what made
 every ally death sound the same.
 
-Both are optional. `context_builder` falls back to the old
+A third optional block, `player_notes`, carries what Exiled told her about his
+own account — roles, champions, matchups, from `ravyn-lynx-p/data/champions.json`.
+It is a **different category** from the situation and carries its own heading
+saying so: the situation is measured, these are his claims. Without that label
+the situation block's "do not state anything beyond these" would forbid the very
+lines the file exists to produce, and blending the two would let her present his
+opinion as something the game told her — the exact §7 failure.
+
+All three are optional. `context_builder` falls back to the old
 SERIOUS/DISMISSIVE/MILESTONE routing when they are absent, so an older PC client
 or a game the API could not read still works.
 
