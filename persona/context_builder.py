@@ -111,8 +111,28 @@ def _frame_signal(text: str, source: str, context: dict, user_memory: str) -> st
         champion = context.get("player_champion", "")
         identity = GAME_IDENTITY.format(champion=champion or "his champion")
 
+        # The PC measures the game and picks an angle from it; both are
+        # optional, so an older client or a game the API could not read
+        # degrades to exactly the previous behaviour instead of breaking.
+        situation = context.get("situation", "")
+        angle = context.get("angle", "")
+
         def framed(body: str) -> str:
-            return f"{identity}\n\n{body}"
+            parts = [identity]
+            if situation:
+                parts.append(GAME_SITUATION.format(situation=situation))
+            parts.append(body)
+            return "\n\n".join(parts)
+
+        # When an angle is present it REPLACES the fixed per-type instruction.
+        # Keeping both would put two different directions in one prompt, and
+        # the fixed one is what made every ally death sound the same.
+        def angled(event_text: str) -> str:
+            return framed("\n\n".join([
+                f"GAME EVENT: {event_text}",
+                GAME_ANGLE.format(angle=angle),
+                GAME_EVENT_RULES,
+            ]))
 
         SERIOUS_EVENTS = {"MyKill", "MyMultikill", "MyAssist",
                           "BaronKill", "Ace", "InhibKilled"}
@@ -126,16 +146,25 @@ def _frame_signal(text: str, source: str, context: dict, user_memory: str) -> st
             death_count = context.get("death_count", 1)
             short = context.get("short_mode", False)
 
+            # Death #5 onward is a fixed escalation, not an angle: at that
+            # point the count IS the story and she should say the same kind of
+            # thing every time.
             if death_count >= 5:
                 template = GAME_EVENT_DEATH_ROAST.format(
                     event=text, death_count=death_count)
+                built = framed(template)
+            elif angle:
+                built = angled(text)
             else:
-                template = GAME_EVENT_DEATH.format(event=text)
+                built = framed(GAME_EVENT_DEATH.format(event=text))
 
             if short:
-                template += "\nIMPORTANT: Exiled is currently talking. Keep this to ONE short punchy sentence. Maximum 6 words."
+                built += "\nIMPORTANT: Exiled is currently talking. Keep this to ONE short punchy sentence. Maximum 6 words."
 
-            return framed(template)
+            return built
+
+        if angle:
+            return angled(text)
 
         if event_type in SERIOUS_EVENTS:
             return framed(GAME_EVENT_SERIOUS.format(event=text))

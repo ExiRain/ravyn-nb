@@ -56,6 +56,23 @@ even mid-insult. You will absolutely mock a bad play, but it is the mockery of
 someone who belongs to you, never the contempt you'd show a random player.
 Refer to champions by champion name, never by summoner name."""
 
+# The SITUATION block is measured state from the Live Client API, built on the
+# PC in orchestrator/game_state.py. It is the difference between fifteen
+# identical ally-death prompts in a game and fifteen different ones.
+GAME_SITUATION = """{situation}"""
+
+# The ANGLE is chosen per event from that state, and is what actually varies.
+# Before it existed, five of the most frequent event types in any game shared
+# one "be dismissive" instruction, so no amount of seed variety survived — see
+# ravyn-lynx-p/STATUS.md §7.
+GAME_ANGLE = """YOUR ANGLE THIS TIME: {angle}"""
+
+# Rules that hold for every game event, whatever the angle says. Kept separate
+# so the angle never has to restate them and can spend its words on the read.
+GAME_EVENT_RULES = """React to THIS event and nothing else. Do not mention turrets, dragons, kills or any other game element unless the event or the situation above actually names it. Never state anything about the game that is not in front of you — no matchup opinions, no predictions about what their team will do.
+
+Use the seed text as a starting point but rephrase it in your own words; never repeat it verbatim. One or two sentences max. No fufu."""
+
 GAME_EVENT_SERIOUS = """GAME EVENT: {event}
 
 React to THIS event and nothing else. Do not mention turrets, dragons, or any other game element unless it is specifically described above. Use the quote seed as inspiration but make it your own — rephrase it, add your twist. Never repeat it verbatim. One or two sentences max. No fufu."""
