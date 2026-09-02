@@ -35,9 +35,9 @@ class Settings:
     # models
     TTS_MODEL_DIR: Path = Path(_env("RAVYN_TTS_MODEL_DIR", "models/tts/06BCustomVoice"))
     LLM_GGUF_PATH: Path = Path(_env("RAVYN_LLM_GGUF_PATH",
-        "models/llm/Qwen3.5-9B-Claude-4.6-OS-AV-H-UNCENSORED-THINK-D_AU-Q4_K_M-imat.gguf"))
+        "models/llm/Qwen3.5-9B-Q5_K_M.gguf"))
     LLM_GGUF_FALLBACK: Path = Path(_env("RAVYN_LLM_FALLBACK",
-        "models/llm/Qwen3.5-9B-Claude-4.6-OS-AV-H-UNCENSORED-THINK-D_AU-Q4_K_S-imat.gguf"))
+        "models/llm/Qwen3.5-9B-Q4_K_M.gguf"))
 
     # data
     DATA_DIR: Path = Path(_env("RAVYN_DATA_DIR", "data"))
