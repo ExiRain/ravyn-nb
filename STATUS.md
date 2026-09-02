@@ -84,6 +84,37 @@ Qwen3.8's smallest open weight is 27B (4-bit ≈ 17–19GB). Not an option.
 
 ---
 
+## Game events are not conversation
+
+`memory.get_history(source)` returns **nothing** for `source == "game"`, and
+game reactions never enter it.
+
+They used to. Every game event went through `add_exchange` like a chat message,
+so the next one reached the LLM with her last five game reactions replayed as a
+dialogue — each "user turn" being the entire framed prompt, SITUATION block and
+all. `MAX_HISTORY` is 5; the live session was terminated because she said the
+same thing 5-6 times in a row. That is what a five-deep history of near-identical
+turns predicts. Opener-based anti-repetition could not help: she varied the first
+four words and repeated the substance.
+
+A game reaction is not a turn in a conversation — nobody said anything to her —
+and her continuity across a game comes from the SITUATION block, which is current
+and accurate where a transcript of five stale prompts is neither.
+
+What she *said* is kept separately in `recent_game_lines` (capped at
+`MAX_GAME_LINES`, cleared on GameStart, not persisted) for the sole purpose of
+telling her not to say it again: *"do not repeat any of them, and do not
+rephrase them"*. `get_repetition_guard(source)` returns that for game events and
+the old opener list for chat, where varying the phrasing is all that is wanted.
+
+Game lines also stay out of `exchange_count`, so they never trigger memory
+compression — a game produces dozens and they would crowd out the chat they are
+supposed to sit alongside.
+
+`python tests/test_game_memory.py` — 14 checks.
+
+---
+
 ## Output filters (`adapters/mq/rabbitmq.py`)
 
 The model ignores instructions it is given, so the prompt is backed by filters.

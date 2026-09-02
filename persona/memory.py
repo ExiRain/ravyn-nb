@@ -22,6 +22,21 @@ MAX_HISTORY = 5
 MAX_USER_NOTE_LEN = 200
 MAX_OPENING_TRACK = 5   # track last N response openers for anti-repetition
 
+# Game reactions are kept apart from conversation history and in full.
+#
+# They used to go through add_exchange like chat, so every game event arrived
+# at the LLM with her last five game reactions replayed as a conversation —
+# each "user turn" being the whole framed prompt, situation block and all. She
+# was being shown five near-identical setups and her own five answers to them,
+# and asked for a sixth. She did the obvious thing and said the same thing
+# again, which is exactly what a five-deep history predicts. Openers-only
+# anti-repetition could not help: she varied the first four words and repeated
+# the substance.
+#
+# So game events carry no history, and this holds what she actually SAID for
+# the sole purpose of telling her not to say it again.
+MAX_GAME_LINES = 6
+
 
 class MemoryManager:
 
@@ -32,6 +47,9 @@ class MemoryManager:
         self.user_notes: dict[str, str] = {}
         self.mood_attribution: dict = {}
         self.recent_openers: deque[str] = deque(maxlen=MAX_OPENING_TRACK)
+        # Deliberately not persisted: it is scoped to the game being played,
+        # and a restart is a new game.
+        self.recent_game_lines: deque[str] = deque(maxlen=MAX_GAME_LINES)
         self._load()
 
     # ---------------------------------------------------------
@@ -51,9 +69,47 @@ class MemoryManager:
             opener = " ".join(words)
             self.recent_openers.append(opener)
 
-    def get_history(self) -> list[dict]:
-        """Return current history as a list for the messages array."""
+    def add_game_line(self, line: str) -> None:
+        """Remember what she said about the game, for anti-repetition only."""
+        line = (line or "").strip()
+        if line:
+            self.recent_game_lines.append(line)
+
+    def clear_game_lines(self) -> None:
+        self.recent_game_lines.clear()
+
+    def get_history(self, source: str = "") -> list[dict]:
+        """
+        Conversation history for the messages array.
+
+        Empty for game events. A game reaction is not a turn in a conversation
+        — nobody said anything to her — and replaying previous ones as if
+        somebody had is what made her repeat herself. Her continuity across a
+        game comes from the SITUATION block instead, which is both accurate and
+        current, unlike a transcript of five stale prompts.
+        """
+        if source == "game":
+            return []
         return list(self.history)
+
+    def get_repetition_guard(self, source: str = "") -> str:
+        """
+        What to tell her not to repeat.
+
+        Chat gets openers — the substance should follow the conversation, only
+        the phrasing needs to vary. Game events get the full lines, because
+        there the substance is what repeats.
+        """
+        if source == "game":
+            if not self.recent_game_lines:
+                return ""
+            lines = "\n".join(f'- "{line}"' for line in self.recent_game_lines)
+            return ("YOU HAVE ALREADY SAID THESE, recently, about this game:\n"
+                    f"{lines}\n"
+                    "Do not repeat any of them, and do not rephrase them. If "
+                    "the only thing you have to say is something on that list, "
+                    "find a different detail in the situation to talk about.")
+        return self.get_recent_openers()
 
     def get_recent_openers(self) -> str:
         """Return formatted recent openers for anti-repetition injection."""
