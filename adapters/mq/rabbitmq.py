@@ -59,6 +59,8 @@ def _strip_narration(text: str) -> str:
     if not text:
         return text
 
+    before_sentences = text
+
     # strip the attribution, keep the spoken part
     text = _DIALOGUE_TAG.sub(r'\1\2', text)
 
@@ -67,18 +69,69 @@ def _strip_narration(text: str) -> str:
             if s.strip() and not _NARRATION_SELF.search(s)]
     text = " ".join(kept)
 
+    # Compare like with like: quotes and whitespace are normalised on both
+    # sides, so the flag reports only that actual narration was dropped —
+    # otherwise every scare-quoted word logs as narration.
+    def _norm(t: str) -> str:
+        return re.sub(r'\s+', ' ', _unquote(t)).strip()
+
+    narration_removed = _norm(text) != _norm(before_sentences)
+
     # she never puts quotation marks around her own words
+    text = _unquote(text)
+
+    return re.sub(r'\s+', ' ', text).strip(), narration_removed
+
+
+def _unquote(text: str) -> str:
     for q in _QUOTE_CHARS:
         text = text.replace(q, '')
+    return text
 
-    return re.sub(r'\s+', ' ', text).strip()
+
+# "tch" is hers, but it only lands when it is rare. Raise this to hear it
+# less, lower it to hear it more; 0 lets every one through.
+TCH_COOLDOWN = 25
+
+_responses_since_tch = TCH_COOLDOWN     # let the first one through
+
+# Every spelling the model reaches for. A plain \btch\b misses "tchk" — the
+# 'k' kills the word boundary — which is how it survived the first version of
+# this gate and stayed the most audible thing she said.
+_TCH = re.compile(r'\b(?:t+c*h+k*|t+s+k+)\b[\s,.…!?—–-]*', re.IGNORECASE)
 
 
-def _strip_banned_openers(text: str) -> str:
-    """Strip 'tch' from the start of responses. Nuclear option."""
-    # matches: "tch...", "tch,", "tch ", "tch..." at the start
-    text = re.sub(r'^tch[\.\,\s…]*', '', text, flags=re.IGNORECASE).strip()
-    # capitalize first letter if we stripped
+def _gate_tch(text: str) -> str:
+    """
+    Ration "tch" rather than banning it.
+
+    The old version stripped it only at position 0, so "Well, tch, whatever"
+    sailed through — and the dismissive game template used to actively ask for
+    it, on the five most frequent events in a game. The result was every other
+    line opening the same way.
+
+    Now it survives at most once per TCH_COOLDOWN responses, and never twice
+    in one response.
+    """
+    global _responses_since_tch
+
+    if not text:
+        return text
+
+    if not _TCH.search(text):
+        _responses_since_tch += 1
+        return text
+
+    if _responses_since_tch >= TCH_COOLDOWN:
+        # keep the first, drop repeats within this same response
+        m = _TCH.search(text)
+        text = text[:m.end()] + _TCH.sub('', text[m.end():])
+        _responses_since_tch = 0
+    else:
+        text = _TCH.sub('', text)
+        _responses_since_tch += 1
+
+    text = re.sub(r'\s+', ' ', text).strip()
     if text and text[0].islower():
         text = text[0].upper() + text[1:]
     return text
@@ -175,11 +228,11 @@ def start_worker():
                 print(f"[{_ts()}][worker] Ravyn: {spoken_text[:80]}")
 
                 spoken_text = _gate_fufu(spoken_text, source)
-                spoken_text = _strip_banned_openers(spoken_text)
+                spoken_text = _gate_tch(spoken_text)
 
                 before = spoken_text
-                spoken_text = _strip_narration(spoken_text)
-                if spoken_text != before:
+                spoken_text, narrated = _strip_narration(spoken_text)
+                if narrated:
                     if spoken_text:
                         print(f"[{_ts()}][worker] Stripped narration -> {spoken_text[:60]}")
                     else:

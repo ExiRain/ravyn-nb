@@ -39,6 +39,10 @@ class Settings:
     LLM_GGUF_FALLBACK: Path = Path(_env("RAVYN_LLM_FALLBACK",
         "models/llm/Qwen3.5-9B-Q4_K_M.gguf"))
 
+    # NOTE: which GGUF llama-server loads, and its context size, live in
+    # scripts/start_llm.sh — that script launches the server. This file
+    # only carries what the client puts in each request. Model paths were
+    # duplicated here and silently did nothing, so they were removed.
     # data
     DATA_DIR: Path = Path(_env("RAVYN_DATA_DIR", "data"))
     TMP_DIR: Path = Path(_env("RAVYN_TMP_DIR", "data/tmp"))
@@ -59,12 +63,10 @@ class Settings:
     QUEUE_REQUEST: str = _env("RAVYN_QUEUE_REQUEST", "ravyn.request")
     QUEUE_RESPONSE: str = _env("RAVYN_QUEUE_RESPONSE", "ravyn.response")
 
-    # --- LLM config ---
-    LLM_CTX: int = _env_int("RAVYN_LLM_CTX", 4096)
+    # --- LLM request config (sent with every call) ---
     LLM_TEMP: float = _env_float("RAVYN_LLM_TEMP", 0.7)
     LLM_MAX_TOKENS: int = _env_int("RAVYN_LLM_MAX_TOKENS", 200)
     LLM_THINKING: bool = _env_bool("RAVYN_LLM_THINKING", False)
-    LLM_GPU_LAYERS: int = _env_int("RAVYN_LLM_GPU_LAYERS", 99)
 
     def resolved(self) -> "Settings":
         root = self.PROJECT_ROOT
@@ -75,8 +77,6 @@ class Settings:
         return Settings(
             PROJECT_ROOT=root,
             TTS_MODEL_DIR=r(self.TTS_MODEL_DIR),
-            LLM_GGUF_PATH=r(self.LLM_GGUF_PATH),
-            LLM_GGUF_FALLBACK=r(self.LLM_GGUF_FALLBACK),
             DATA_DIR=r(self.DATA_DIR),
             TMP_DIR=r(self.TMP_DIR),
             NOTEBOOK_HOST=self.NOTEBOOK_HOST,
@@ -89,11 +89,9 @@ class Settings:
             RABBIT_VHOST=self.RABBIT_VHOST,
             QUEUE_REQUEST=self.QUEUE_REQUEST,
             QUEUE_RESPONSE=self.QUEUE_RESPONSE,
-            LLM_CTX=self.LLM_CTX,
             LLM_TEMP=self.LLM_TEMP,
             LLM_MAX_TOKENS=self.LLM_MAX_TOKENS,
             LLM_THINKING=self.LLM_THINKING,
-            LLM_GPU_LAYERS=self.LLM_GPU_LAYERS,
         )
 
 
