@@ -124,10 +124,26 @@ def _frame_signal(text: str, source: str, context: dict, user_memory: str) -> st
 
     recent_chat_block = _build_recent_chat_block(context)
 
-    # --- Chat ---
-    if source == "chat":
-        if user and user.lower() in ("exiled", "exiledr", "exiledra1n"):
-            return CHAT_EXILED.format(message=text, recent_chat_block=recent_chat_block)
+    # --- Chat, and voice when it lands ---
+    # Voice is the same shape: somebody addressed her by name or by speaking.
+    # The source sets context["user"] and context["is_owner"] exactly as chat
+    # does, and gets the same framing and the same per-person memory.
+    if source in ("chat", "voice"):
+        # The PC decides who he is, from data/identity.json, and says so in
+        # the context. It used to be pattern-matched against a tuple here as
+        # well — three copies of one fact across two machines, and this copy
+        # could not be edited without a deploy.
+        #
+        # The name check survives as a fallback for a client that sends no
+        # flag, so an older PC still recognises him.
+        is_owner = context.get("is_owner")
+        if is_owner is None:
+            is_owner = bool(user and user.lower() in
+                            ("exiled", "exiledr", "exiledra1n"))
+
+        if is_owner:
+            return CHAT_EXILED.format(message=text,
+                                      recent_chat_block=recent_chat_block)
         return CHAT_MESSAGE.format(
             user=user or "someone", message=text,
             user_notes=user_notes, recent_chat_block=recent_chat_block,

@@ -249,6 +249,18 @@ TONE and the theme opening are built fresh for one response and thrown away;
 would replay stale instructions as if somebody had said them — which is the
 failure that got a session terminated.
 
+**She knows when it is him from a flag, not from his name.** `context["is_owner"]`
+comes from the PC, which resolves it against `data/identity.json` — one file,
+one loader, shared by chat and the game source. `context_builder` used to
+pattern-match `("exiled", "exiledr", "exiledra1n")` here as well, which meant
+his identity lived in three places across two machines and this copy could not
+be changed without a deploy. The name check survives only as a fallback for a
+client that sends no flag.
+
+`source="voice"` is routed alongside `"chat"`, so when STT lands it needs
+nothing new here: set `context["user"]` and `context["is_owner"]` and it gets
+the same framing and the same per-person memory buffer.
+
 **Known gap:** the persona is English. Banned openers, "fufu", the teammate
 vocabulary — none survive translation. A Russian addendum is the streamer's
 writing, not something to generate.
