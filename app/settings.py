@@ -34,12 +34,15 @@ class Settings:
 
     # models
     TTS_MODEL_DIR: Path = Path(_env("RAVYN_TTS_MODEL_DIR", "models/tts/06BCustomVoice"))
+    LLM_GGUF_PATH: Path = Path(_env("RAVYN_LLM_GGUF_PATH",
+        "models/llm/Qwen3.5-9B-Q5_K_M.gguf"))
+    LLM_GGUF_FALLBACK: Path = Path(_env("RAVYN_LLM_FALLBACK",
+        "models/llm/Qwen3.5-9B-Q4_K_M.gguf"))
 
     # NOTE: which GGUF llama-server loads, and its context size, live in
     # scripts/start_llm.sh — that script launches the server. This file
     # only carries what the client puts in each request. Model paths were
     # duplicated here and silently did nothing, so they were removed.
-
     # data
     DATA_DIR: Path = Path(_env("RAVYN_DATA_DIR", "data"))
     TMP_DIR: Path = Path(_env("RAVYN_TMP_DIR", "data/tmp"))
