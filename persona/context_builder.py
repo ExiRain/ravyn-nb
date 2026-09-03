@@ -138,8 +138,11 @@ def _frame_signal(text: str, source: str, context: dict, user_memory: str) -> st
         # flag, so an older PC still recognises him.
         is_owner = context.get("is_owner")
         if is_owner is None:
-            is_owner = bool(user and user.lower() in
-                            ("exiled", "exiledr", "exiledra1n"))
+            # Exact login only. A Twitch handle is a claim anyone can register,
+            # and this fallback grants her loyal framing — "this is your
+            # person, respond loyal but mouthy" — so a loose match here is an
+            # impersonation hole. "exiled" and "exiledr" are not his.
+            is_owner = bool(user and user.lower() == "exiledra1n")
 
         if is_owner:
             return CHAT_EXILED.format(message=text,
