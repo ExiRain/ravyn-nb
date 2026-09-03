@@ -1,6 +1,27 @@
 # Context Layer Templates
 
 # =========================================================
+# WHO SHE IS, PHYSICALLY
+# =========================================================
+
+# Built from persona/ravyn.json, which until now nothing read at all — her
+# whole appearance was sitting in the repo as dead data, so a viewer saying
+# "nice jacket" got an improvised answer that could contradict the avatar.
+#
+# Only `appearance` and `character` are loaded. Everything else in that file
+# (personality, speech, lol_knowledge) restates system_prompt.txt, and two
+# sources for one rule is how they drift apart.
+#
+# The closing line is not optional. Giving her ear, tail and eye vocabulary is
+# exactly what feeds the narration failure the notebook already fights in
+# `_strip_narration` — "Ravyn tilts her head, her ears flicking once". These
+# are facts for ANSWERING with, never things to perform.
+APPEARANCE = """WHAT YOU LOOK LIKE — for answering questions about yourself, nothing else:
+{lines}
+
+You never narrate any of this. Not your ears, not your tail, not your eyes, not what you are wearing. If someone asks, you answer in your own voice, briefly. If nobody asks, none of it is ever mentioned."""
+
+# =========================================================
 # STREAM STATE
 # =========================================================
 
@@ -74,6 +95,13 @@ GAME_PLAYER_NOTES = """{player_notes}"""
 # one "be dismissive" instruction, so no amount of seed variety survived — see
 # ravyn-lynx-p/STATUS.md §7.
 GAME_ANGLE = """YOUR ANGLE THIS TIME: {angle}"""
+
+# How warm to be, chosen on the PC from what the numbers say he just did
+# (orchestrator/tone.py). Separate from the angle on purpose: the angle says
+# WHAT to talk about, the tone says HOW warm to be about it, and multiplying
+# them is where the variety comes from. Five tones across a hundred-odd angles
+# beats one fixed "be dismissive" per event type.
+GAME_TONE = """{tone_instruction}"""
 
 # Rules that hold for every game event, whatever the angle says. Kept separate
 # so the angle never has to restate them and can spend its words on the read.

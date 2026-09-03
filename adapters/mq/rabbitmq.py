@@ -209,10 +209,14 @@ def start_worker():
 
                 messages = build_messages(
                     text=text, source=source, context=context,
-                    history=memory.get_history(),
+                    # Per person, not per stream: a shared buffer meant
+                    # answering one viewer while carrying another's thread.
+                    # Game events carry none at all, and their own
+                    # anti-repetition block — see persona/memory.py.
+                    history=memory.get_history(source, user),
                     general_memory=memory.general_memory,
                     user_memory=user_notes,
-                    recent_openers=memory.get_recent_openers(),
+                    recent_openers=memory.get_repetition_guard(source),
                 )
 
                 response = run_llm(messages, thinking=settings.LLM_THINKING)
@@ -240,12 +244,24 @@ def start_worker():
 
                 # update memory
                 if spoken_text:
-                    memory.add_exchange(
-                        user_msg=text, assistant_msg=spoken_text,
-                        source=source, user=user)
+                    if source == "game":
+                        # Kept out of conversation history on purpose, and out
+                        # of the compression budget with it: a game produces
+                        # dozens of these and they would crowd out the chat
+                        # they are supposed to sit alongside.
+                        if context.get("event_type") == "GameStart":
+                            memory.clear_game_lines()   # before, not after
+                        memory.add_game_line(spoken_text)
+                    else:
+                        memory.add_exchange(
+                            user_msg=text, assistant_msg=spoken_text,
+                            source=source, user=user)
 
-                    if memory.needs_compression():
-                        _compress_memory_async(user)
+                        # Per person too: notes are written from that
+                        # person's messages when THEY have said enough, not
+                        # when the room has.
+                        if memory.needs_compression(user):
+                            _compress_memory_async(user)
 
         except Exception as e:
             # still fall through to publish — the PC must always get a reply

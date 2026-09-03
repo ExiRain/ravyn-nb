@@ -2,11 +2,48 @@
 Context builder — assembles the full messages array for the LLM.
 """
 
+import json
 from pathlib import Path
 from persona.context_templates import *
 
 PERSONA_DIR = Path(__file__).parent
 SYSTEM_PROMPT = (PERSONA_DIR / "system_prompt.txt").read_text(encoding="utf-8").strip()
+
+
+def _load_appearance() -> str:
+    """
+    Her look, from persona/ravyn.json.
+
+    Only `appearance` is read. The rest of that file restates
+    system_prompt.txt, and carrying one rule in two places is how they drift.
+    Flattened to one line per feature and kept short on purpose: the notebook
+    runs at 4096 context on the default quant, and this is in every single
+    prompt including game events.
+
+    A missing or malformed file costs her the ability to describe herself and
+    nothing else.
+    """
+    try:
+        data = json.loads((PERSONA_DIR / "ravyn.json").read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"[persona] No appearance loaded: {e}")
+        return ""
+
+    look = data.get("appearance") or {}
+    if not look:
+        return ""
+
+    lines = []
+    for label, value in look.items():
+        if isinstance(value, dict):
+            value = ", ".join(str(v) for v in value.values() if v)
+        if value:
+            lines.append(f"  {label.replace('_', ' ')}: {value}")
+
+    return APPEARANCE.format(lines="\n".join(lines)) if lines else ""
+
+
+APPEARANCE_BLOCK = _load_appearance()
 
 
 def build_messages(
@@ -20,6 +57,9 @@ def build_messages(
 ) -> list[dict]:
 
     system_parts = [SYSTEM_PROMPT]
+
+    if APPEARANCE_BLOCK:
+        system_parts.append(APPEARANCE_BLOCK)
 
     lang = context.get("lang", "en")
     if lang == "ru":
@@ -84,10 +124,29 @@ def _frame_signal(text: str, source: str, context: dict, user_memory: str) -> st
 
     recent_chat_block = _build_recent_chat_block(context)
 
-    # --- Chat ---
-    if source == "chat":
-        if user and user.lower() in ("exiled", "exiledr", "exiledra1n"):
-            return CHAT_EXILED.format(message=text, recent_chat_block=recent_chat_block)
+    # --- Chat, and voice when it lands ---
+    # Voice is the same shape: somebody addressed her by name or by speaking.
+    # The source sets context["user"] and context["is_owner"] exactly as chat
+    # does, and gets the same framing and the same per-person memory.
+    if source in ("chat", "voice"):
+        # The PC decides who he is, from data/identity.json, and says so in
+        # the context. It used to be pattern-matched against a tuple here as
+        # well — three copies of one fact across two machines, and this copy
+        # could not be edited without a deploy.
+        #
+        # The name check survives as a fallback for a client that sends no
+        # flag, so an older PC still recognises him.
+        is_owner = context.get("is_owner")
+        if is_owner is None:
+            # Exact login only. A Twitch handle is a claim anyone can register,
+            # and this fallback grants her loyal framing — "this is your
+            # person, respond loyal but mouthy" — so a loose match here is an
+            # impersonation hole. "exiled" and "exiledr" are not his.
+            is_owner = bool(user and user.lower() == "exiledra1n")
+
+        if is_owner:
+            return CHAT_EXILED.format(message=text,
+                                      recent_chat_block=recent_chat_block)
         return CHAT_MESSAGE.format(
             user=user or "someone", message=text,
             user_notes=user_notes, recent_chat_block=recent_chat_block,
@@ -117,6 +176,7 @@ def _frame_signal(text: str, source: str, context: dict, user_memory: str) -> st
         situation = context.get("situation", "")
         angle = context.get("angle", "")
         player_notes = context.get("player_notes", "")
+        tone_instruction = context.get("tone_instruction", "")
 
         def framed(body: str) -> str:
             parts = [identity]
@@ -131,11 +191,12 @@ def _frame_signal(text: str, source: str, context: dict, user_memory: str) -> st
         # Keeping both would put two different directions in one prompt, and
         # the fixed one is what made every ally death sound the same.
         def angled(event_text: str) -> str:
-            return framed("\n\n".join([
-                f"GAME EVENT: {event_text}",
-                GAME_ANGLE.format(angle=angle),
-                GAME_EVENT_RULES,
-            ]))
+            parts = [f"GAME EVENT: {event_text}",
+                     GAME_ANGLE.format(angle=angle)]
+            if tone_instruction:
+                parts.append(GAME_TONE.format(tone_instruction=tone_instruction))
+            parts.append(GAME_EVENT_RULES)
+            return framed("\n\n".join(parts))
 
         SERIOUS_EVENTS = {"MyKill", "MyMultikill", "MyAssist",
                           "BaronKill", "Ace", "InhibKilled"}
@@ -149,15 +210,16 @@ def _frame_signal(text: str, source: str, context: dict, user_memory: str) -> st
             death_count = context.get("death_count", 1)
             short = context.get("short_mode", False)
 
-            # Death #5 onward is a fixed escalation, not an angle: at that
-            # point the count IS the story and she should say the same kind of
-            # thing every time.
-            if death_count >= 5:
-                template = GAME_EVENT_DEATH_ROAST.format(
-                    event=text, death_count=death_count)
-                built = framed(template)
-            elif angle:
+            # The fixed "death #5 onward is always a roast" escalation is
+            # gone. It is what made her repeat herself: a maximum-heat
+            # instruction, twice in a row, gets the same roast twice. The PC's
+            # tone ladder now decides, and refuses consecutive roasts —
+            # orchestrator/tone.py.
+            if angle:
                 built = angled(text)
+            elif death_count >= 5:
+                built = framed(GAME_EVENT_DEATH_ROAST.format(
+                    event=text, death_count=death_count))
             else:
                 built = framed(GAME_EVENT_DEATH.format(event=text))
 

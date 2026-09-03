@@ -84,6 +84,41 @@ Qwen3.8's smallest open weight is 27B (4-bit ≈ 17–19GB). Not an option.
 
 ---
 
+## Game events are not conversation
+
+`memory.get_history(source)` returns **nothing** for `source == "game"`, and
+game reactions never enter it.
+
+They used to. Every game event went through `add_exchange` like a chat message,
+so the next one reached the LLM with her last five game reactions replayed as a
+dialogue — each "user turn" being the entire framed prompt, SITUATION block and
+all. `MAX_HISTORY` is 5; the live session was terminated because she said the
+same thing 5-6 times in a row. That is what a five-deep history of near-identical
+turns predicts. Opener-based anti-repetition could not help: she varied the first
+four words and repeated the substance.
+
+A game reaction is not a turn in a conversation — nobody said anything to her —
+and her continuity across a game comes from the SITUATION block, which is current
+and accurate where a transcript of five stale prompts is neither.
+
+What she *said* is kept separately in `recent_game_lines` (capped at
+`MAX_GAME_LINES`, cleared on GameStart, not persisted) for the sole purpose of
+telling her not to say it again: *"do not repeat any of them, and do not
+rephrase them"*. `get_repetition_guard(source)` returns that for game events and
+the old opener list for chat, where varying the phrasing is all that is wanted.
+
+Game lines also stay out of `exchange_count`, so they never trigger memory
+compression — a game produces dozens and they would crowd out the chat they are
+supposed to sit alongside.
+
+`python tests/test_game_memory.py` — 15 checks.
+`python tests/test_persona_context.py` — 31 checks, including that no
+scaffolding reaches memory and that her appearance carries its narration rule.
+`python tests/test_per_user_memory.py` — 31 checks: threads do not mix, notes
+are written from one person's words, eviction is bounded.
+
+---
+
 ## Output filters (`adapters/mq/rabbitmq.py`)
 
 The model ignores instructions it is given, so the prompt is backed by filters.
@@ -137,14 +172,94 @@ All three are optional. `context_builder` falls back to the old
 SERIOUS/DISMISSIVE/MILESTONE routing when they are absent, so an older PC client
 or a game the API could not read still works.
 
-The one deliberate exception is death #5 and beyond: that stays on
-`GAME_EVENT_DEATH_ROAST`, because at that point the count *is* the story and she
-should say the same kind of thing every time.
+A fourth block, `tone_instruction`, says **how warm to be** — chosen on the PC
+from what the numbers say he just did (`orchestrator/tone.py`). It is separate
+from the angle on purpose: the angle says *what* to talk about, the tone says
+*how warm to be about it*, and multiplying them is where the variety comes from.
+
+**The fixed "death #5 onward is always a roast" escalation is gone.** It was the
+same failure the angle system was built to fix, in template form: a
+maximum-heat instruction handed out twice in a row gets the same roast twice —
+live report, *"FULL ROAST only makes her repeat herself on the 2nd message"*.
+The PC's tone ladder decides now, and refuses consecutive roasts.
+`GAME_EVENT_DEATH_ROAST` survives only as the fallback for a client that sends
+no angle.
 
 Why any of this exists: `ravyn-lynx-p/STATUS.md` §7, "Why she felt repetitive".
 
 `context_builder.py` reads `context["lang"]` — `"ru"` forces Russian,
 `"multilang"` mirrors the speaker. The PC decides which; see the full document.
+
+**Her appearance is loaded from `ravyn.json`** — and until now it was not.
+That file carried her whole look (dark-blue fluffy hair, fox ears, blue eyes
+that go red when sparked, the scar, the oversized orange jacket, the choker)
+and **nothing in the codebase read it**. A viewer saying "nice jacket" got an
+improvised answer that could contradict the avatar.
+
+Only the `appearance` key is read. The rest of that file restates
+`system_prompt.txt`, and carrying one rule in two places is how they drift.
+
+It ships with a hard rule against narrating any of it — *"You never narrate any
+of this. Not your ears, not your tail, not your eyes, not what you are
+wearing."* That is not decoration: handing her ear and tail vocabulary is
+exactly what feeds the narration failure `_strip_narration` exists to clean up.
+It is facts for **answering** with, never things to perform. ~170 tokens, and it
+is in every prompt including game events, so keep it short.
+
+### What she remembers, and what she never does
+
+| | Kept | Where | Persisted |
+|---|---|---|---|
+| Viewer notes | ≤200 chars per person, LLM-written | `memory.user_notes` | yes, `data/memory.json` |
+| Rolling summary | 2-3 sentences, spans the whole room | `memory.general_memory` | yes |
+| Chat history | last 5 exchanges **per person**, raw messages only | `memory.histories[user]` | no |
+| Her game lines | last 6, cleared on GameStart | `memory.recent_game_lines` | no |
+
+**History is per person.** One shared buffer was fine while the streamer was
+the only chatter and wrong the moment he was not:
+
+- A reply to one viewer carried the last five messages from *everyone* as one
+  conversation, so she answered person C mid-thread with person A.
+- `get_user_note_compression_prompt` built from that shared buffer and wrote
+  the result to whoever was active at the trigger. Five viewers talking meant
+  the fifth one's notes were written from a transcript of all five — she would
+  remember other people's personalities as theirs. Notes are the only part of
+  her memory that survives a restart, so a wrong one is wrong forever. That is
+  why this was fixed before voice rather than after.
+
+Each person gets their own buffer and their own exchange counter, so notes are
+written from their words when *they* have said enough, and compressing one
+person leaves everyone else's thread intact. `MAX_TRACKED_USERS` (24) bounds it,
+evicting the least recently active — that costs them their short-term thread and
+nothing else, since notes persist separately. Unattributed speech (voice with no
+name yet) shares one `ANON` buffer rather than silently joining someone's
+conversation.
+
+`general_memory` deliberately still spans everybody: "what has been happening on
+this stream" is a property of the room, not of one person. The per-user note is
+the opposite.
+
+What she can still see of the room is `recent_chat`, which the PC batches into
+context and which is framed as other people talking rather than as her
+conversation.
+
+**No prompt scaffolding is ever stored.** The SITUATION block, the ANGLE, the
+TONE and the theme opening are built fresh for one response and thrown away;
+`add_exchange` stores the raw signal text, not the framed message. Storing them
+would replay stale instructions as if somebody had said them — which is the
+failure that got a session terminated.
+
+**She knows when it is him from a flag, not from his name.** `context["is_owner"]`
+comes from the PC, which resolves it against `data/identity.json` — one file,
+one loader, shared by chat and the game source. `context_builder` used to
+pattern-match `("exiled", "exiledr", "exiledra1n")` here as well, which meant
+his identity lived in three places across two machines and this copy could not
+be changed without a deploy. The name check survives only as a fallback for a
+client that sends no flag.
+
+`source="voice"` is routed alongside `"chat"`, so when STT lands it needs
+nothing new here: set `context["user"]` and `context["is_owner"]` and it gets
+the same framing and the same per-person memory buffer.
 
 **Known gap:** the persona is English. Banned openers, "fufu", the teammate
 vocabulary — none survive translation. A Russian addendum is the streamer's
