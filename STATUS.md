@@ -261,6 +261,31 @@ client that sends no flag.
 nothing new here: set `context["user"]` and `context["is_owner"]` and it gets
 the same framing and the same per-person memory buffer.
 
+### `data/memory.json` is runtime state, not source
+
+It is **gitignored**, and was tracked until it caused its first merge conflict.
+The notebook rewrites it whenever memory compresses, so tracking it guaranteed
+a conflict on every pull — and resolving one by hand means picking somebody's
+stale `general_memory`, which then sits in the system prompt of **every single
+response** until it happens to be overwritten. A test run left
+`"Ravyn and multiple viewers discussed Team K deaths"` in there, and she would
+have carried a phantom memory of a mock game into a live stream.
+
+Shape, for when it needs checking by eye:
+
+```json
+{ "general_memory": "", "user_notes": {}, "mood_attribution": {}, "last_updated": 0 }
+```
+
+All four keys, `user_notes` keyed by lowercase name. It regenerates on first
+run, so **deleting it is always a safe reset** — and the right move after any
+mock or `--test` session, since nothing in it is worth keeping and all of it
+reaches the prompt.
+
+Note what is *not* in the file: conversation history and her recent game lines
+are runtime-only by design. Only the compressed summary and the per-person
+notes persist, which is also why a wrong note is wrong until it is overwritten.
+
 **Known gap:** the persona is English. Banned openers, "fufu", the teammate
 vocabulary — none survive translation. A Russian addendum is the streamer's
 writing, not something to generate.
