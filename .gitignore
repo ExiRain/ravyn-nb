@@ -18,3 +18,13 @@ models/
 *.gguf
 *.safetensors
 *.bin
+
+# runtime state, not source
+#
+# data/memory.json is rewritten by the notebook every time memory compresses,
+# so tracking it guaranteed a merge conflict on every pull — and resolving one
+# by hand means picking somebody's stale general_memory, which then goes into
+# the system prompt of every single response until it is overwritten.
+#
+# It regenerates on first run. Nothing here is worth versioning.
+data/memory.json
