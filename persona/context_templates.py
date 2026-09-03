@@ -1,6 +1,27 @@
 # Context Layer Templates
 
 # =========================================================
+# WHO SHE IS, PHYSICALLY
+# =========================================================
+
+# Built from persona/ravyn.json, which until now nothing read at all — her
+# whole appearance was sitting in the repo as dead data, so a viewer saying
+# "nice jacket" got an improvised answer that could contradict the avatar.
+#
+# Only `appearance` and `character` are loaded. Everything else in that file
+# (personality, speech, lol_knowledge) restates system_prompt.txt, and two
+# sources for one rule is how they drift apart.
+#
+# The closing line is not optional. Giving her ear, tail and eye vocabulary is
+# exactly what feeds the narration failure the notebook already fights in
+# `_strip_narration` — "Ravyn tilts her head, her ears flicking once". These
+# are facts for ANSWERING with, never things to perform.
+APPEARANCE = """WHAT YOU LOOK LIKE — for answering questions about yourself, nothing else:
+{lines}
+
+You never narrate any of this. Not your ears, not your tail, not your eyes, not what you are wearing. If someone asks, you answer in your own voice, briefly. If nobody asks, none of it is ever mentioned."""
+
+# =========================================================
 # STREAM STATE
 # =========================================================
 

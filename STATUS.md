@@ -111,7 +111,9 @@ Game lines also stay out of `exchange_count`, so they never trigger memory
 compression — a game produces dozens and they would crowd out the chat they are
 supposed to sit alongside.
 
-`python tests/test_game_memory.py` — 14 checks.
+`python tests/test_game_memory.py` — 15 checks.
+`python tests/test_persona_context.py` — 31 checks, including that no
+scaffolding reaches memory and that her appearance carries its narration rule.
 
 ---
 
@@ -185,6 +187,37 @@ Why any of this exists: `ravyn-lynx-p/STATUS.md` §7, "Why she felt repetitive".
 
 `context_builder.py` reads `context["lang"]` — `"ru"` forces Russian,
 `"multilang"` mirrors the speaker. The PC decides which; see the full document.
+
+**Her appearance is loaded from `ravyn.json`** — and until now it was not.
+That file carried her whole look (dark-blue fluffy hair, fox ears, blue eyes
+that go red when sparked, the scar, the oversized orange jacket, the choker)
+and **nothing in the codebase read it**. A viewer saying "nice jacket" got an
+improvised answer that could contradict the avatar.
+
+Only the `appearance` key is read. The rest of that file restates
+`system_prompt.txt`, and carrying one rule in two places is how they drift.
+
+It ships with a hard rule against narrating any of it — *"You never narrate any
+of this. Not your ears, not your tail, not your eyes, not what you are
+wearing."* That is not decoration: handing her ear and tail vocabulary is
+exactly what feeds the narration failure `_strip_narration` exists to clean up.
+It is facts for **answering** with, never things to perform. ~170 tokens, and it
+is in every prompt including game events, so keep it short.
+
+### What she remembers, and what she never does
+
+| | Kept | Where | Persisted |
+|---|---|---|---|
+| Viewer notes | ≤200 chars per person, LLM-written | `memory.user_notes` | yes, `data/memory.json` |
+| Rolling summary | 2-3 sentences, compressed every 5 exchanges | `memory.general_memory` | yes |
+| Chat history | last 5 exchanges, **raw messages only** | `memory.history` | no |
+| Her game lines | last 6, cleared on GameStart | `memory.recent_game_lines` | no |
+
+**No prompt scaffolding is ever stored.** The SITUATION block, the ANGLE, the
+TONE and the theme opening are built fresh for one response and thrown away;
+`add_exchange` stores the raw signal text, not the framed message. Storing them
+would replay stale instructions as if somebody had said them — which is the
+failure that got a session terminated.
 
 **Known gap:** the persona is English. Banned openers, "fufu", the teammate
 vocabulary — none survive translation. A Russian addendum is the streamer's

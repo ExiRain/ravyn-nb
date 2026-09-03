@@ -2,11 +2,48 @@
 Context builder — assembles the full messages array for the LLM.
 """
 
+import json
 from pathlib import Path
 from persona.context_templates import *
 
 PERSONA_DIR = Path(__file__).parent
 SYSTEM_PROMPT = (PERSONA_DIR / "system_prompt.txt").read_text(encoding="utf-8").strip()
+
+
+def _load_appearance() -> str:
+    """
+    Her look, from persona/ravyn.json.
+
+    Only `appearance` is read. The rest of that file restates
+    system_prompt.txt, and carrying one rule in two places is how they drift.
+    Flattened to one line per feature and kept short on purpose: the notebook
+    runs at 4096 context on the default quant, and this is in every single
+    prompt including game events.
+
+    A missing or malformed file costs her the ability to describe herself and
+    nothing else.
+    """
+    try:
+        data = json.loads((PERSONA_DIR / "ravyn.json").read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"[persona] No appearance loaded: {e}")
+        return ""
+
+    look = data.get("appearance") or {}
+    if not look:
+        return ""
+
+    lines = []
+    for label, value in look.items():
+        if isinstance(value, dict):
+            value = ", ".join(str(v) for v in value.values() if v)
+        if value:
+            lines.append(f"  {label.replace('_', ' ')}: {value}")
+
+    return APPEARANCE.format(lines="\n".join(lines)) if lines else ""
+
+
+APPEARANCE_BLOCK = _load_appearance()
 
 
 def build_messages(
@@ -20,6 +57,9 @@ def build_messages(
 ) -> list[dict]:
 
     system_parts = [SYSTEM_PROMPT]
+
+    if APPEARANCE_BLOCK:
+        system_parts.append(APPEARANCE_BLOCK)
 
     lang = context.get("lang", "en")
     if lang == "ru":
