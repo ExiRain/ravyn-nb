@@ -168,9 +168,18 @@ All three are optional. `context_builder` falls back to the old
 SERIOUS/DISMISSIVE/MILESTONE routing when they are absent, so an older PC client
 or a game the API could not read still works.
 
-The one deliberate exception is death #5 and beyond: that stays on
-`GAME_EVENT_DEATH_ROAST`, because at that point the count *is* the story and she
-should say the same kind of thing every time.
+A fourth block, `tone_instruction`, says **how warm to be** — chosen on the PC
+from what the numbers say he just did (`orchestrator/tone.py`). It is separate
+from the angle on purpose: the angle says *what* to talk about, the tone says
+*how warm to be about it*, and multiplying them is where the variety comes from.
+
+**The fixed "death #5 onward is always a roast" escalation is gone.** It was the
+same failure the angle system was built to fix, in template form: a
+maximum-heat instruction handed out twice in a row gets the same roast twice —
+live report, *"FULL ROAST only makes her repeat herself on the 2nd message"*.
+The PC's tone ladder decides now, and refuses consecutive roasts.
+`GAME_EVENT_DEATH_ROAST` survives only as the fallback for a client that sends
+no angle.
 
 Why any of this exists: `ravyn-lynx-p/STATUS.md` §7, "Why she felt repetitive".
 

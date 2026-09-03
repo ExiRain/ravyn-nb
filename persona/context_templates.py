@@ -75,6 +75,13 @@ GAME_PLAYER_NOTES = """{player_notes}"""
 # ravyn-lynx-p/STATUS.md §7.
 GAME_ANGLE = """YOUR ANGLE THIS TIME: {angle}"""
 
+# How warm to be, chosen on the PC from what the numbers say he just did
+# (orchestrator/tone.py). Separate from the angle on purpose: the angle says
+# WHAT to talk about, the tone says HOW warm to be about it, and multiplying
+# them is where the variety comes from. Five tones across a hundred-odd angles
+# beats one fixed "be dismissive" per event type.
+GAME_TONE = """{tone_instruction}"""
+
 # Rules that hold for every game event, whatever the angle says. Kept separate
 # so the angle never has to restate them and can spend its words on the read.
 GAME_EVENT_RULES = """React to THIS event and nothing else. Do not mention turrets, dragons, kills or any other game element unless the event or the situation above actually names it. Never state anything about the game that is not in front of you — no matchup opinions of your own, no predictions about what their team will do. Anything Exiled has told you above is his to claim and yours to repeat; everything beyond it is off limits.

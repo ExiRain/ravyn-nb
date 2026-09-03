@@ -117,6 +117,7 @@ def _frame_signal(text: str, source: str, context: dict, user_memory: str) -> st
         situation = context.get("situation", "")
         angle = context.get("angle", "")
         player_notes = context.get("player_notes", "")
+        tone_instruction = context.get("tone_instruction", "")
 
         def framed(body: str) -> str:
             parts = [identity]
@@ -131,11 +132,12 @@ def _frame_signal(text: str, source: str, context: dict, user_memory: str) -> st
         # Keeping both would put two different directions in one prompt, and
         # the fixed one is what made every ally death sound the same.
         def angled(event_text: str) -> str:
-            return framed("\n\n".join([
-                f"GAME EVENT: {event_text}",
-                GAME_ANGLE.format(angle=angle),
-                GAME_EVENT_RULES,
-            ]))
+            parts = [f"GAME EVENT: {event_text}",
+                     GAME_ANGLE.format(angle=angle)]
+            if tone_instruction:
+                parts.append(GAME_TONE.format(tone_instruction=tone_instruction))
+            parts.append(GAME_EVENT_RULES)
+            return framed("\n\n".join(parts))
 
         SERIOUS_EVENTS = {"MyKill", "MyMultikill", "MyAssist",
                           "BaronKill", "Ace", "InhibKilled"}
@@ -149,15 +151,16 @@ def _frame_signal(text: str, source: str, context: dict, user_memory: str) -> st
             death_count = context.get("death_count", 1)
             short = context.get("short_mode", False)
 
-            # Death #5 onward is a fixed escalation, not an angle: at that
-            # point the count IS the story and she should say the same kind of
-            # thing every time.
-            if death_count >= 5:
-                template = GAME_EVENT_DEATH_ROAST.format(
-                    event=text, death_count=death_count)
-                built = framed(template)
-            elif angle:
+            # The fixed "death #5 onward is always a roast" escalation is
+            # gone. It is what made her repeat herself: a maximum-heat
+            # instruction, twice in a row, gets the same roast twice. The PC's
+            # tone ladder now decides, and refuses consecutive roasts —
+            # orchestrator/tone.py.
+            if angle:
                 built = angled(text)
+            elif death_count >= 5:
+                built = framed(GAME_EVENT_DEATH_ROAST.format(
+                    event=text, death_count=death_count))
             else:
                 built = framed(GAME_EVENT_DEATH.format(event=text))
 
