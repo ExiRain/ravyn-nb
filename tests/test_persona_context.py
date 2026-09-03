@@ -67,9 +67,9 @@ def test_scaffolding_reaches_the_prompt():
 def test_scaffolding_never_enters_memory():
     print("\n--- and never enters memory ---")
     m = MemoryManager()
-    m.history.clear()
+    m.histories.clear()
     m.recent_game_lines.clear()
-    m.exchange_count = 0
+    m.exchange_counts.clear()
 
     # This is what the worker does for a game event: only what she SAID.
     m.add_game_line("What was the plan there?")
@@ -94,7 +94,7 @@ def test_scaffolding_never_enters_memory():
     # Chat DOES keep history — but the raw message, not the framed prompt.
     m.add_exchange(user_msg="hey ravyn", assistant_msg="Hm.", source="chat",
                    user="someviewer")
-    kept = [e["content"] for e in m.get_history("chat")]
+    kept = [e["content"] for e in m.get_history("chat", "someviewer")]
     check("chat history keeps the raw message", "hey ravyn" in kept, str(kept))
     check("and not a framed prompt",
           not any("SITUATION" in c or "YOUR ANGLE" in c for c in kept))

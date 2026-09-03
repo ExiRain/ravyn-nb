@@ -114,6 +114,8 @@ supposed to sit alongside.
 `python tests/test_game_memory.py` — 15 checks.
 `python tests/test_persona_context.py` — 31 checks, including that no
 scaffolding reaches memory and that her appearance carries its narration rule.
+`python tests/test_per_user_memory.py` — 31 checks: threads do not mix, notes
+are written from one person's words, eviction is bounded.
 
 ---
 
@@ -209,9 +211,37 @@ is in every prompt including game events, so keep it short.
 | | Kept | Where | Persisted |
 |---|---|---|---|
 | Viewer notes | ≤200 chars per person, LLM-written | `memory.user_notes` | yes, `data/memory.json` |
-| Rolling summary | 2-3 sentences, compressed every 5 exchanges | `memory.general_memory` | yes |
-| Chat history | last 5 exchanges, **raw messages only** | `memory.history` | no |
+| Rolling summary | 2-3 sentences, spans the whole room | `memory.general_memory` | yes |
+| Chat history | last 5 exchanges **per person**, raw messages only | `memory.histories[user]` | no |
 | Her game lines | last 6, cleared on GameStart | `memory.recent_game_lines` | no |
+
+**History is per person.** One shared buffer was fine while the streamer was
+the only chatter and wrong the moment he was not:
+
+- A reply to one viewer carried the last five messages from *everyone* as one
+  conversation, so she answered person C mid-thread with person A.
+- `get_user_note_compression_prompt` built from that shared buffer and wrote
+  the result to whoever was active at the trigger. Five viewers talking meant
+  the fifth one's notes were written from a transcript of all five — she would
+  remember other people's personalities as theirs. Notes are the only part of
+  her memory that survives a restart, so a wrong one is wrong forever. That is
+  why this was fixed before voice rather than after.
+
+Each person gets their own buffer and their own exchange counter, so notes are
+written from their words when *they* have said enough, and compressing one
+person leaves everyone else's thread intact. `MAX_TRACKED_USERS` (24) bounds it,
+evicting the least recently active — that costs them their short-term thread and
+nothing else, since notes persist separately. Unattributed speech (voice with no
+name yet) shares one `ANON` buffer rather than silently joining someone's
+conversation.
+
+`general_memory` deliberately still spans everybody: "what has been happening on
+this stream" is a property of the room, not of one person. The per-user note is
+the opposite.
+
+What she can still see of the room is `recent_chat`, which the PC batches into
+context and which is framed as other people talking rather than as her
+conversation.
 
 **No prompt scaffolding is ever stored.** The SITUATION block, the ANGLE, the
 TONE and the theme opening are built fresh for one response and thrown away;

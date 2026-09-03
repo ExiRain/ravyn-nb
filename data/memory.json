@@ -1,6 +1,8 @@
 {
-  "general_memory": "Ravyn and a Viewer",
-  "user_notes": {},
+  "general_memory": "Alice asked about supports.",
+  "user_notes": {
+    "alice": "Plays support, asks about the fox thing."
+  },
   "mood_attribution": {},
-  "last_updated": 1779898831.882287
+  "last_updated": 1788451097.0085871
 }

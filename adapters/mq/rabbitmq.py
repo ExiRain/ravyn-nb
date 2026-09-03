@@ -209,9 +209,11 @@ def start_worker():
 
                 messages = build_messages(
                     text=text, source=source, context=context,
-                    # Game events carry no conversation history and their own
+                    # Per person, not per stream: a shared buffer meant
+                    # answering one viewer while carrying another's thread.
+                    # Game events carry none at all, and their own
                     # anti-repetition block — see persona/memory.py.
-                    history=memory.get_history(source),
+                    history=memory.get_history(source, user),
                     general_memory=memory.general_memory,
                     user_memory=user_notes,
                     recent_openers=memory.get_repetition_guard(source),
@@ -255,7 +257,10 @@ def start_worker():
                             user_msg=text, assistant_msg=spoken_text,
                             source=source, user=user)
 
-                        if memory.needs_compression():
+                        # Per person too: notes are written from that
+                        # person's messages when THEY have said enough, not
+                        # when the room has.
+                        if memory.needs_compression(user):
                             _compress_memory_async(user)
 
         except Exception as e:

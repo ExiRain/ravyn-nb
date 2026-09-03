@@ -39,10 +39,10 @@ def check(name: str, cond: bool, detail: str = "") -> None:
 
 def fresh() -> MemoryManager:
     m = MemoryManager()
-    m.history.clear()
+    m.histories.clear()
     m.recent_openers.clear()
     m.recent_game_lines.clear()
-    m.exchange_count = 0
+    m.exchange_counts.clear()
     return m
 
 
@@ -57,7 +57,7 @@ def test_history_is_withheld_from_game_events():
           str(len(m.get_history("chat"))))
     check("game events get none", m.get_history("game") == [],
           str(m.get_history("game")))
-    check("an unspecified source behaves like before",
+    check("an unspecified source still reads the buffer",
           len(m.get_history()) == 10)
 
 
@@ -68,8 +68,8 @@ def test_game_lines_are_kept_apart():
     m.add_game_line("Measly CS for all that farming.")
 
     check("game lines do not enter conversation history", m.get_history() == [])
-    check("nor the exchange count that drives compression",
-          m.exchange_count == 0)
+    check("nor the per-person counts that drive note writing",
+          m.exchange_counts == {}, str(m.exchange_counts))
     check("nor the chat opener list", len(m.recent_openers) == 0)
 
     guard = m.get_repetition_guard("game")
