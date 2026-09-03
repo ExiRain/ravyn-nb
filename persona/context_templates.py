@@ -155,9 +155,3 @@ GENERAL_MEMORY = """RECENT STREAM MEMORY:
 
 USER_MEMORY = """WHAT YOU KNOW ABOUT {user}:
 {notes}"""
-
-# =========================================================
-# MOOD OVERRIDE
-# =========================================================
-
-MOOD_NUDGE = """Your mood has shifted. You're currently feeling {mood_description}. This was caused by: {cause}. Let this color your response naturally — don't announce it, just feel it."""

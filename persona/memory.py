@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import json
 import time
-from pathlib import Path
 from collections import deque
 
 from app.settings import get_settings
@@ -75,7 +74,6 @@ class MemoryManager:
         self.exchange_counts: dict[str, int] = {}
         self.general_memory = ""
         self.user_notes: dict[str, str] = {}
-        self.mood_attribution: dict = {}
         self.recent_openers: deque[str] = deque(maxlen=MAX_OPENING_TRACK)
         # Deliberately not persisted: it is scoped to the game being played,
         # and a restart is a new game.
@@ -272,22 +270,6 @@ Write ONLY the updated notes, nothing else."""
         return prompt
 
     # ---------------------------------------------------------
-    # mood attribution
-    # ---------------------------------------------------------
-
-    def set_mood_cause(self, cause: str, who: str = ""):
-        """Track what/who caused a significant mood shift."""
-        self.mood_attribution = {
-            "cause": cause,
-            "who": who,
-            "timestamp": time.time(),
-        }
-        self._save()
-
-    def get_mood_cause(self) -> dict:
-        return self.mood_attribution
-
-    # ---------------------------------------------------------
     # persistence
     # ---------------------------------------------------------
 
@@ -295,7 +277,6 @@ Write ONLY the updated notes, nothing else."""
         data = {
             "general_memory": self.general_memory,
             "user_notes": self.user_notes,
-            "mood_attribution": self.mood_attribution,
             "last_updated": time.time(),
         }
         try:
@@ -315,7 +296,6 @@ Write ONLY the updated notes, nothing else."""
                 data = json.load(f)
             self.general_memory = data.get("general_memory", "")
             self.user_notes = data.get("user_notes", {})
-            self.mood_attribution = data.get("mood_attribution", {})
             print(f"[memory] Loaded — {len(self.user_notes)} user notes, "
                   f"memory: {self.general_memory[:50] or 'empty'}...")
         except Exception as e:
