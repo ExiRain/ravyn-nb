@@ -305,5 +305,21 @@ writing, not something to generate.
 - No PR on this repo. **It must merge together with the PC** — merging the PC
   alone brings back double-voice and silent quote mode.
 - Stray submodule: a gitlink at path `ravyn-nb/` with no `.gitmodules`
-- `adapters/audio/stream_api.py` and `adapters/tts/qwen_tts.py` are no longer
-  wired to anything. Kept as reference; delete when you are confident.
+
+## Deleted, and why
+
+Everything below was verified unreachable before removal — nothing imported it,
+nothing called it, no script referenced it.
+
+| Removed | Why |
+|---|---|
+| `adapters/audio/stream_api.py`, `adapters/tts/qwen_tts.py` | Audio and TTS moved to the PC permanently (§1). Their only remaining references were each other |
+| `transport/audio_stream_server.py`, `transport/test_r.py` | Same — the notebook does not stream audio |
+| `tts_test.py`, `tts_test1.py`, `tools/test_request.py` | TTS testers on the machine that no longer does TTS |
+| `app/logging.py` | An empty file, zero bytes |
+| `MemoryManager.set_mood_cause` / `get_mood_cause` and the persisted `mood_attribution` | Written and read by nothing |
+| `MOOD_NUDGE` template and its branch | Guarded by `context["mood_nudge"]`, which the PC has never set |
+| `LLM_GGUF_PATH`, `LLM_GGUF_FALLBACK` | Read by nothing. `scripts/start_llm.sh` owns model choice — `dd61311` removed these once and a merge of an older `main` put them back, directly under the comment saying they had been removed |
+
+The empty `adapters/audio/`, `adapters/tts/`, `transport/` and `tools/`
+directories went with them.

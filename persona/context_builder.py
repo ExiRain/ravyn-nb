@@ -87,12 +87,6 @@ def build_messages(
     if recent_openers:
         system_parts.append(recent_openers)
 
-    if context.get("mood_nudge"):
-        system_parts.append(MOOD_NUDGE.format(
-            mood_description=context["mood_nudge"].get("description", "shifted"),
-            cause=context["mood_nudge"].get("cause", "recent events"),
-        ))
-
     system_message = "\n\n".join(system_parts)
 
     user_message = _frame_signal(text, source, context, user_memory)
