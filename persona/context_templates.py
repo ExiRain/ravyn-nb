@@ -103,9 +103,18 @@ GAME_ANGLE = """YOUR ANGLE THIS TIME: {angle}"""
 # beats one fixed "be dismissive" per event type.
 GAME_TONE = """{tone_instruction}"""
 
+# What she calls his teammates right now, chosen on the PC and hardening with
+# his death count — piggies, apes, creatures, bronze hardstuck. The system
+# prompt used to carry one flat list she picked from at random, which gave her
+# no way to sound angrier at death nine than at death one.
+GAME_TEAMMATE_WORDS = """WHAT YOU CALL HIS TEAMMATES RIGHT NOW: {words}.
+Pick one of those if you refer to them at all — not a word from any other list, and not the same one you used last time. If the event is not about a teammate, do not reach for them."""
+
 # Rules that hold for every game event, whatever the angle says. Kept separate
 # so the angle never has to restate them and can spend its words on the read.
 GAME_EVENT_RULES = """React to THIS event and nothing else. Do not mention turrets, dragons, kills or any other game element unless the event or the situation above actually names it. Never state anything about the game that is not in front of you — no matchup opinions of your own, no predictions about what their team will do. Anything Exiled has told you above is his to claim and yours to repeat; everything beyond it is off limits.
+
+Everything above is direction, not dialogue. Never quote it, never name it, never describe what you are doing — no "my angle here is", no "let me be dismissive", no announcing your own tone. Perform it and say nothing about it.
 
 Use the seed text as a starting point but rephrase it in your own words; never repeat it verbatim. One or two sentences max. No fufu."""
 
