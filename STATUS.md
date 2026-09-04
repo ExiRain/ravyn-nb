@@ -127,8 +127,24 @@ the sampler was deterministic. Asking *"@Ravyn ты умная?"* twice returned
 **byte-identical** answer, mood tags and all. It was not a prompt problem: the
 prompt grew by an exchange each time (6792 → 6823 → 6854 chars) and the output
 still did not move. Temperature had been doing nothing since the server started.
-`run_llm` now sends an explicit random seed per request. `run_llm_simple` does
-not, deliberately — memory compression is better off deterministic.
+`run_llm` now sends an explicit random seed per request, plus a ±0.05
+temperature jitter as belt and braces: `seed` is an OpenAI-compat field and not
+every llama.cpp build applies it per request on `/v1/chat/completions`. The
+jitter is inaudible but perturbs the softmax enough that a fixed seed cannot
+land on the same token sequence twice. `run_llm_simple` gets neither,
+deliberately — memory compression is better off deterministic.
+
+**The seed is logged**, which makes the next diagnosis a one-liner:
+
+```
+[llm] Prompt: 6 messages, ~6823 chars, seed=272306291
+```
+
+| What the log shows | What it means |
+|---|---|
+| no `seed=` at all | the worker is still running old code — **restart it**, `git pull` does not reload a live process |
+| different seeds, identical replies | the server ignored the seed; the jitter is now the thing carrying it |
+| different seeds, different replies | fixed |
 
 **She pulled every subject back to the game.** Asked about her clothes, or
 whether she was clever, she answered with his bad plays. Her persona carries a
