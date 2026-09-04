@@ -88,12 +88,17 @@ def run_llm(messages: list[dict], thinking: bool = False, _retry: int = 0) -> di
 
     # log prompt size for debugging context overflow
     total_chars = sum(len(m.get("content", "")) for m in messages)
-    print(f"[{_ts()}][llm] Prompt: {len(messages)} messages, ~{total_chars} chars")
+    seed = random.randint(0, 2**31 - 1)
+    # The seed is logged so a repeated answer can be told apart from a stale
+    # process: two identical replies with two different seeds means the server
+    # ignored it, while no seed in the log at all means this file is not the
+    # one running.
+    print(f"[{_ts()}][llm] Prompt: {len(messages)} messages, ~{total_chars} chars, "
+          f"seed={seed}")
 
     payload = {
         "model": "local",
         "messages": messages,
-        "temperature": settings.LLM_TEMP,
         "max_tokens": settings.LLM_MAX_TOKENS,
         "top_p": 0.95,
         "top_k": 20,
@@ -108,7 +113,14 @@ def run_llm(messages: list[dict], thinking: bool = False, _retry: int = 0) -> di
         # The prompt was not identical — history had grown by an exchange —
         # so temperature was doing nothing at all. Every response since the
         # server started was the single most likely continuation.
-        "seed": random.randint(0, 2**31 - 1),
+        "seed": seed,
+
+        # Belt and braces, because `seed` is an OpenAI-compat field and not
+        # every llama.cpp build applies it per request on /v1/chat/completions.
+        # A jitter this small is inaudible in her voice, but it perturbs the
+        # softmax enough that a fixed seed can no longer land on the same token
+        # sequence twice. If the seed IS honoured this changes nothing.
+        "temperature": round(settings.LLM_TEMP + random.uniform(-0.05, 0.05), 3),
     }
 
     try:
