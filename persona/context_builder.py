@@ -189,6 +189,10 @@ def _frame_signal(text: str, source: str, context: dict, user_memory: str) -> st
                      GAME_ANGLE.format(angle=angle)]
             if tone_instruction:
                 parts.append(GAME_TONE.format(tone_instruction=tone_instruction))
+            teammate_words = context.get("teammate_words")
+            if teammate_words:
+                parts.append(GAME_TEAMMATE_WORDS.format(
+                    words=", ".join(f'"{w}"' for w in teammate_words)))
             parts.append(GAME_EVENT_RULES)
             return framed("\n\n".join(parts))
 

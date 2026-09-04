@@ -249,6 +249,31 @@ TONE and the theme opening are built fresh for one response and thrown away;
 would replay stale instructions as if somebody had said them — which is the
 failure that got a session terminated.
 
+**What she calls his teammates comes from the PC now**, per event, and hardens
+with his death count — piggies, apes, creatures, bronze hardstuck. The system
+prompt used to carry one flat list she picked from at random, which gave her no
+way to sound angrier at death nine than at death one. `system_prompt.txt` now
+defers to the injected words and keeps only a fallback for when none arrive.
+
+**`GAME_EVENT_RULES` bans restating the direction.** From a live session: *"some
+topics are said directly and not accepted as theme or tone of conversation"* —
+she was narrating her own instructions ("my angle here is…") rather than
+performing them. Everything above the event is direction, not dialogue.
+
+**She speaks Russian now, half the time.** The PC rolls it once per game and
+stamps `lang` on every game signal, which reaches the existing LANGUAGE
+directive here. The angles, tones and themes stay English on purpose: they are
+instructions to the model, not text she says, and a 201-language model takes
+English direction to Russian output without help.
+
+Her persona is the gap. Everything in `system_prompt.txt` — the banned openers,
+"fufu", the teammate ladder — is English and none of it survives translation, so
+a Russian game will sound flatter until the addendum exists.
+
+**Voice arrives as `source="voice"`** with `user` and `is_owner` set, so it takes
+the CHAT_EXILED framing and shares his history buffer with his chat. Nothing
+here needed changing for it.
+
 **She knows when it is him from a flag, not from his name.** `context["is_owner"]`
 comes from the PC, which resolves it against `data/identity.json` — one file,
 one loader, shared by chat and the game source. `context_builder` used to
