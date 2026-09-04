@@ -4,6 +4,8 @@ LLM client — talks to llama-server's OpenAI-compatible API.
 
 import re
 import time
+import random
+
 import requests
 from app.settings import get_settings
 
@@ -98,6 +100,15 @@ def run_llm(messages: list[dict], thinking: bool = False, _retry: int = 0) -> di
         "chat_template_kwargs": {"enable_thinking": False},
         "presence_penalty": 1.5,
         "frequency_penalty": 0.3,
+        # Explicit, and different every time.
+        #
+        # Without it llama-server reuses one seed per slot, which makes the
+        # sampler deterministic: asking the same question twice returned a
+        # BYTE-IDENTICAL answer, mood tags and all, despite temperature 0.7.
+        # The prompt was not identical — history had grown by an exchange —
+        # so temperature was doing nothing at all. Every response since the
+        # server started was the single most likely continuation.
+        "seed": random.randint(0, 2**31 - 1),
     }
 
     try:

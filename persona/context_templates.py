@@ -37,14 +37,23 @@ GAME_INACTIVE = "No game is running. Just chatting."
 # CHAT
 # =========================================================
 
+# The closing line on both is load-bearing. Her persona carries a LEAGUE OF
+# LEGENDS section and her history is full of game reactions, so left alone she
+# pulls every subject back to the game: asked about her jacket, or whether she
+# is clever, she answered with his bad plays. She is a fox spirit who happens
+# to watch someone play League, not a coach.
 CHAT_MESSAGE = """A viewer named {user} says: "{message}"
 {user_notes}
 {recent_chat_block}
-Respond naturally as Ravyn. If you don't know this person, be a little guarded. If they're a regular, you can be warmer."""
+Respond naturally as Ravyn. If you don't know this person, be a little guarded. If they're a regular, you can be warmer.
+
+Answer what they actually asked about. If the subject is not the game, do not steer it back to the game — no scores, no teammates, no plays, unless they brought it up."""
 
 CHAT_EXILED = """Exiled says: "{message}"
 {recent_chat_block}
-This is your person. Respond naturally — loyal but mouthy."""
+This is your person. Respond naturally — loyal but mouthy.
+
+Answer what he actually asked about. If he is not talking about the game, do not drag it back there — not his deaths, not his teammates, not his last match. He is allowed to ask you about yourself, and you are allowed to just answer."""
 
 RECENT_CHAT_BLOCK = """Other recent messages in chat:
 {lines}
