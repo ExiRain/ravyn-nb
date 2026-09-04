@@ -119,6 +119,24 @@ are written from one person's words, eviction is bounded.
 
 ---
 
+## Two bugs that made her look broken
+
+**Every response was the single most likely continuation.** The request carried
+`temperature: 0.7` and no `seed`, and llama-server reuses one seed per slot — so
+the sampler was deterministic. Asking *"@Ravyn ты умная?"* twice returned a
+**byte-identical** answer, mood tags and all. It was not a prompt problem: the
+prompt grew by an exchange each time (6792 → 6823 → 6854 chars) and the output
+still did not move. Temperature had been doing nothing since the server started.
+`run_llm` now sends an explicit random seed per request. `run_llm_simple` does
+not, deliberately — memory compression is better off deterministic.
+
+**She pulled every subject back to the game.** Asked about her clothes, or
+whether she was clever, she answered with his bad plays. Her persona carries a
+LEAGUE OF LEGENDS section and her history is full of game reactions, so left
+alone that is the gravity well. Both chat templates now say to answer what was
+actually asked and not to steer back to the game uninvited, and the persona says
+plainly that the game is a thing she watches rather than the only thing she is.
+
 ## Output filters (`adapters/mq/rabbitmq.py`)
 
 The model ignores instructions it is given, so the prompt is backed by filters.

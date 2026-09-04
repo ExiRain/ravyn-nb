@@ -151,11 +151,45 @@ def test_viewer_notes_reach_the_prompt():
           "WHAT YOU KNOW ABOUT" not in bare[0]["content"])
 
 
+def test_chat_does_not_tunnel_into_the_game():
+    """
+    From a live session: asked whether she was clever, and asked about her
+    clothes, she answered with his bad plays both times.
+
+    Her persona carries a LEAGUE OF LEGENDS section and her history is full of
+    game reactions, so left alone she pulls every subject back to the game. She
+    is a fox spirit who happens to watch someone play, not a coach.
+    """
+    print("\n--- she answers what was asked ---")
+    from persona.context_templates import CHAT_EXILED, CHAT_MESSAGE
+
+    for name, template in (("Exiled", CHAT_EXILED), ("a viewer", CHAT_MESSAGE)):
+        check(f"{name} is told to answer what was actually asked",
+              "actually asked" in template, template[:60])
+        check(f"{name} is told not to steer back to the game",
+              "game" in template and ("do not steer" in template
+                                      or "do not drag" in template))
+
+    check("and she is allowed to talk about herself",
+          "about yourself" in CHAT_EXILED)
+
+    owner = build_messages("@Ravyn ты умная ?", "chat",
+                           {"user": "exiledra1n", "is_owner": True},
+                           history=[])[-1]["content"]
+    check("it reaches his prompt", "actually asked" in owner)
+
+    system = build_messages("hi", "chat", {"user": "someviewer"},
+                            history=[])[0]["content"]
+    check("the persona says the game is not all she is",
+          "not the only thing you are" in system)
+
+
 def main():
     test_scaffolding_reaches_the_prompt()
     test_scaffolding_never_enters_memory()
     test_appearance()
     test_viewer_notes_reach_the_prompt()
+    test_chat_does_not_tunnel_into_the_game()
 
     print()
     if FAILURES:
