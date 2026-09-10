@@ -84,6 +84,63 @@ def _handle_think_tags(raw: str) -> str:
     return ""
 
 
+# Whether this build accepts `seed` on /v1/chat/completions. None = not yet
+# known. Some llama.cpp builds reject unknown fields outright with a 400, and
+# `run_llm` turns any request failure into an empty response — which is total
+# silence, on every single line, with only one log line to say why. So the
+# first rejection downgrades the payload for the rest of the session instead.
+_SEED_SUPPORTED: bool | None = None
+
+# Fields that are nice to have and not worth going mute over.
+_OPTIONAL_FIELDS = ("seed",)
+
+
+def _post(payload: dict) -> str | None:
+    """
+    One request, with a retry that drops the optional fields.
+
+    Returns None only when the server genuinely could not answer — never
+    because of a parameter it does not recognise.
+    """
+    global _SEED_SUPPORTED
+
+    if _SEED_SUPPORTED is False:
+        payload = {k: v for k, v in payload.items()
+                   if k not in _OPTIONAL_FIELDS}
+
+    try:
+        response = requests.post(LLM_URL, json=payload, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        if _SEED_SUPPORTED is None and "seed" in payload:
+            _SEED_SUPPORTED = True
+        return data["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        if not any(f in payload for f in _OPTIONAL_FIELDS):
+            print(f"[{_ts()}][llm] Error: {e}")
+            return None
+
+        print(f"[{_ts()}][llm] Request rejected ({e}) — retrying without "
+              f"{'/'.join(_OPTIONAL_FIELDS)}")
+
+    # Second attempt, stripped. If this works the field was the problem, and
+    # it stays off for the rest of the session rather than costing two
+    # requests every time.
+    stripped = {k: v for k, v in payload.items() if k not in _OPTIONAL_FIELDS}
+    try:
+        response = requests.post(LLM_URL, json=stripped, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        _SEED_SUPPORTED = False
+        print(f"[{_ts()}][llm] This build does not accept a per-request seed. "
+              f"Dropped for the session; the temperature jitter still varies "
+              f"her output.")
+        return data["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        print(f"[{_ts()}][llm] Error: {e}")
+        return None
+
+
 def run_llm(messages: list[dict], thinking: bool = False, _retry: int = 0) -> dict:
 
     # log prompt size for debugging context overflow
@@ -123,13 +180,8 @@ def run_llm(messages: list[dict], thinking: bool = False, _retry: int = 0) -> di
         "temperature": round(settings.LLM_TEMP + random.uniform(-0.05, 0.05), 3),
     }
 
-    try:
-        response = requests.post(LLM_URL, json=payload, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-        raw_text = data["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        print(f"[{_ts()}][llm] Error: {e}")
+    raw_text = _post(payload)
+    if raw_text is None:
         return {"text": "", "raw": "", "mood": None, "tired": None}
 
     print(f"[{_ts()}][llm] RAW ({len(raw_text)} chars): [{raw_text}]")
