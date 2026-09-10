@@ -157,12 +157,41 @@ plainly that the game is a thing she watches rather than the only thing she is.
 
 The model ignores instructions it is given, so the prompt is backed by filters.
 
-**`_strip_narration`** — she was speaking prose about herself aloud: *"Ravyn
-tilts her head at the chat notification"*, *'"NewViewer_123," she murmurs'*.
-Matches **by name**, never by pronoun — "she/he + verb" would eat real speech,
-since she talks about teammates that way constantly. Also strips dialogue
-attributions and quotation marks. Returns an explicit flag so `Stripped
-narration ->` only logs when narration was actually removed (`c27d4aa`).
+**`persona/filters.py`** — everything between the model and the TTS, in one
+testable place. It was inline in the worker, where the patterns could not be
+inspected or tested without reading the consumer.
+
+| Catches | Why it matters |
+|---|---|
+| Narration by name, **all tenses + possessive** | The old `\bRavyn\s+\w+s\b` was present tense only: *"Ravyn tilts"* was removed while *"Ravyn tilted her head"* and *"Ravyn's ears flick"* were read aloud |
+| Dialogue attributions | *'"NewViewer_123," she murmurs'* |
+| Stage directions, **any length** | The old caps were 20 chars bracketed / 30 in asterisks, so *"\*She leans back in her chair, unimpressed\*"* was spoken in full |
+| Instruction leak | *"My angle here is to be dismissive"* — she narrates her direction instead of performing it |
+| Echoed block labels | `GAME EVENT:`, `SITUATION:`. The first attempt put `game event:` inside a `\b…\b` group, where **it could never match** — a word boundary after `:` needs a word character next |
+| Emoji, self-quoting, over-length | The sentence cap is enforced *here* so it is counted, rather than the PC silently truncating mid-thought |
+
+Matched **by name, never by pronoun**: she talks about teammates as "she/he"
+constantly, so a pronoun rule would eat real speech.
+
+**Narrow beats thorough.** Deleting a real line is far worse than missing one,
+so the leak patterns are possessive-anchored — bare *"the angle"* is not a tell,
+because *"you have the angle on him"* is something she actually says. Three
+phrasings ate real speech on a first pass and are now regression cases.
+
+### The tally is the measurement
+
+Every intervention is counted and reported every ten responses:
+
+```
+[worker] Cleaned [narration] -> Rough. Try again.
+[filters] 40 responses: narration 3, leak 1, over-length 7
+```
+
+*"She felt off today"* is not something you can act on. `narration 3, leak 1` is
+— it is a number that moves when a prompt changes, which is what makes the
+character work tunable instead of guesswork. `over-length` counts how often the
+2–3 sentence rule is being ignored; a high rate there is a prompt problem, not a
+filter problem.
 
 **`_gate_tch`** — `TCH_COOLDOWN = 25`, one number, tune by ear. This took three
 attempts: the dismissive game template *asked* for "tch" on the five most
@@ -356,9 +385,9 @@ writing, not something to generate.
 - **Russian output quality is untested.** Set `LANG_REPLY = "ru"` on the PC,
   send chat, listen. Ten minutes, and it gates every RU decision.
 - **Official vs abliterated A/B** — `./scripts/start_llm.sh old` is the baseline
-- Watch for `Stripped narration ->` and `ALL narration, saying nothing:` — if
-  they fire often on the official model the prompt is not landing; if quiet, that
-  problem was the abliterated build
+- Watch the `[filters]` tally rather than individual lines. A high `narration`
+  or `over-length` rate on the official model means the prompt is not landing;
+  quiet means that problem was the abliterated build
 - One response once repeated an entire previous answer verbatim before answering.
   Seen once, never reproduced. Suspect history/template; 8192 context may fix it.
 - No PR on this repo. **It must merge together with the PC** — merging the PC
