@@ -5,6 +5,7 @@ import time
 import pika
 from app.settings import get_settings
 from adapters.llm.llama_server_client import run_llm, run_llm_simple
+from persona import filters
 from persona.context_builder import build_messages
 from persona.memory import MemoryManager
 
@@ -19,73 +20,16 @@ def _ts() -> str:
     return time.strftime("%H:%M:%S")
 
 
+# Character-drift counters for this worker run. Printed every so often rather
+# than per response, so the rate is visible without burying the log.
+TALLY = filters.Tally()
+FILTER_REPORT_EVERY = 10
+
+
 def _clean_for_tts(text: str) -> str:
     text = re.sub(r'[\[\(][^\]\)]{1,20}[\]\)]', '', text)
     text = re.sub(r'\*[^*]{1,30}\*', '', text)
     text = re.sub(r'  +', ' ', text).strip()
-    return text
-
-
-# Third-person narration about herself: "Ravyn tilts her head...".
-# Matched by NAME only. "she/he + verb" is deliberately not matched — she talks
-# about other people that way constantly ("he plays jungle like a bot"), so a
-# pronoun rule would eat real speech.
-_NARRATION_SELF = re.compile(r'\bRavyn\s+\w+s\b', re.IGNORECASE)
-
-# Dialogue attribution after a closing quote: '"NewViewer_123," she murmurs
-# to no one.' The quote-comma-pronoun-verb shape only occurs in prose, so this
-# is safe where a bare pronoun rule would not be.
-# The comma usually sits INSIDE the closing quote ('..._123," she murmurs'),
-# so it has to be consumed here or it survives as a dangling 'NewViewer_123,.'
-_DIALOGUE_TAG = re.compile(
-    r',?\s*(["\u201c\u201d])\s*,?\s*(?:she|he|they)\s+\w+s\b[^.!?]*([.!?])',
-    re.IGNORECASE)
-
-_QUOTE_CHARS = '"\u201c\u201d'
-
-
-def _strip_narration(text: str) -> str:
-    """
-    Remove prose narration so she speaks instead of describing herself.
-
-    The model writes fiction ABOUT Ravyn rather than being her — "Ravyn tilts
-    her head at the chat notification", '"NewViewer_123," she murmurs' — and
-    TTS reads every word of it aloud. The system prompt forbids this and the
-    model does it anyway, so it gets removed here.
-
-    Returns "" when the whole response was narration. Saying nothing is better
-    than narrating; the caller logs it so the rate is visible.
-    """
-    if not text:
-        return text
-
-    before_sentences = text
-
-    # strip the attribution, keep the spoken part
-    text = _DIALOGUE_TAG.sub(r'\1\2', text)
-
-    # drop whole sentences that describe her in third person
-    kept = [s.strip() for s in re.split(r'(?<=[.!?])\s+', text)
-            if s.strip() and not _NARRATION_SELF.search(s)]
-    text = " ".join(kept)
-
-    # Compare like with like: quotes and whitespace are normalised on both
-    # sides, so the flag reports only that actual narration was dropped —
-    # otherwise every scare-quoted word logs as narration.
-    def _norm(t: str) -> str:
-        return re.sub(r'\s+', ' ', _unquote(t)).strip()
-
-    narration_removed = _norm(text) != _norm(before_sentences)
-
-    # she never puts quotation marks around her own words
-    text = _unquote(text)
-
-    return re.sub(r'\s+', ' ', text).strip(), narration_removed
-
-
-def _unquote(text: str) -> str:
-    for q in _QUOTE_CHARS:
-        text = text.replace(q, '')
     return text
 
 
@@ -240,13 +184,24 @@ def start_worker():
                 spoken_text = _gate_fufu(spoken_text, source)
                 spoken_text = _gate_tch(spoken_text)
 
+                # Everything between the model and the TTS, counted as it goes
+                # — see persona/filters.py. The tally is what turns "she felt
+                # off today" into a number that moves when a prompt changes.
                 before = spoken_text
-                spoken_text, narrated = _strip_narration(spoken_text)
-                if narrated:
+                result = filters.clean(spoken_text, TALLY)
+                spoken_text = result.text
+
+                if result.changed:
+                    what = ", ".join(result.removed)
                     if spoken_text:
-                        print(f"[{_ts()}][worker] Stripped narration -> {spoken_text[:60]}")
+                        print(f"[{_ts()}][worker] Cleaned [{what}] -> "
+                              f"{spoken_text[:60]}")
                     else:
-                        print(f"[{_ts()}][worker] ALL narration, saying nothing: {before[:80]}")
+                        print(f"[{_ts()}][worker] ALL {what}, saying nothing: "
+                              f"{before[:80]}")
+
+                if TALLY.responses % FILTER_REPORT_EVERY == 0:
+                    print(f"[{_ts()}][filters] {TALLY.summary()}")
 
                 # update memory
                 if spoken_text:
