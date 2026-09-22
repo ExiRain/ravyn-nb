@@ -153,6 +153,72 @@ alone that is the gravity well. Both chat templates now say to answer what was
 actually asked and not to steer back to the game uninvited, and the persona says
 plainly that the game is a thing she watches rather than the only thing she is.
 
+## What the model was asked, and what it answered
+
+`logs/worker-<date>-<time>.jsonl`, one JSON line per request, written by
+`app/worker_log.py` from the moment the worker connects.
+
+The PC has recorded what she *said* since `ravyn-lynx-p/orchestrator/session_log.py`
+landed. That is enough to prove she repeated herself and to name the angle
+that produced it, and not enough to say why. Four things existed only as
+stdout in the WORKER pane and scrolled away with it:
+
+- **the prompt** — the log said `~6823 chars, seed=272306291`, never the text,
+  so there was no way to check whether the angle was even in it
+- **the seed**, per request
+- **her raw output**, before the filters. The PC receives the cleaned text and
+  cannot know what was cut
+- **which filter fired on which line** — the tally gives the rate, not the
+  sentence
+
+A live session produced four near-identical death roasts under three
+different angles. Whether the model ignored the direction, whether the
+direction never arrived, or whether a filter removed the part that differed,
+is a question only this file can answer.
+
+Per record: `req_id`, source, the knobs the PC chose (`config_key`,
+`angle_id`, `tone`), the **framed prompt** (the last user message — SITUATION,
+ANGLE and TONE verbatim), `prompt_chars`, `history_turns`, `seed`, the
+temperature actually used, `llm_s`, the **raw** model output, the text before
+the filters, what they `removed`, and what was finally said. The system prompt
+is written **once per run** as its own record rather than on every line: it is
+identical each time and would otherwise be nine tenths of the file.
+
+**`run_llm` returns the seed and the temperature now.** They were printed and
+discarded, which meant the one diagnosis they exist for — different seeds,
+identical replies, so the server ignored the seed — had to be made by eye
+against scrollback. `tools/worker_report.py` makes it in one line.
+
+**Did the direction land?** Checked at record time, where the context the PC
+sent and the prompt built from it are both in hand: each of `angle`,
+`tone_instruction` and `situation` is matched against the framed prompt and
+the answer stored as a flag. Guessing it afterwards from block headings does
+not work — the angle has one (`YOUR ANGLE THIS TIME`), the tone and the
+situation are injected as bare text.
+
+```bash
+python tools/worker_report.py            # newest log
+python tools/worker_report.py --prompt   # the persona exactly as it ran
+python tools/worker_report.py --line 14  # one request: prompt, raw, said
+```
+
+The report answers: how many angles reached the prompt, whether two different
+seeds ever returned the same bytes, what the filters took and how often, how
+much history each source carried (game events must carry **none**), prompt
+size and LLM latency.
+
+**`req_id` joins the two halves.** The PC stamps it on every request
+(`ravyn-lynx-p/orchestrator/models.py`); this side records it, and falls back
+to its own id when an older client sends none. Neither repo needs the other to
+work — only the join does.
+
+`logs/` is gitignored. The framed prompt contains viewer notes and chat
+history by name, so these files stay on the notebook.
+
+`python tests/test_worker_log.py` — 32 checks.
+
+---
+
 ## Output filters (`adapters/mq/rabbitmq.py`)
 
 The model ignores instructions it is given, so the prompt is backed by filters.
@@ -382,6 +448,9 @@ writing, not something to generate.
 
 ## Open here
 
+- The two logs join on `req_id` but nothing reads them together yet. A joined
+  view would answer "she repeated herself — was the angle in the prompt?"
+  without opening two files side by side
 - **Russian output quality is untested.** Set `LANG_REPLY = "ru"` on the PC,
   send chat, listen. Ten minutes, and it gates every RU decision.
 - **Official vs abliterated A/B** — `./scripts/start_llm.sh old` is the baseline

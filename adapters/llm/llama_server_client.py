@@ -180,9 +180,24 @@ def run_llm(messages: list[dict], thinking: bool = False, _retry: int = 0) -> di
         "temperature": round(settings.LLM_TEMP + random.uniform(-0.05, 0.05), 3),
     }
 
+    t0 = time.time()
     raw_text = _post(payload)
+    llm_s = round(time.time() - t0, 2)
+
+    # The seed and the temperature travel back with the answer now. They were
+    # printed and thrown away, which meant the one diagnosis they exist for —
+    # different seeds, identical replies, so the server ignored the seed — had
+    # to be made by eye against scrollback.
+    facts = {
+        "seed": seed,
+        "temperature": payload["temperature"],
+        "llm_s": llm_s,
+        "prompt_chars": total_chars,
+        "retried": _retry > 0,
+    }
+
     if raw_text is None:
-        return {"text": "", "raw": "", "mood": None, "tired": None}
+        return {"text": "", "raw": "", "mood": None, "tired": None, **facts}
 
     print(f"[{_ts()}][llm] RAW ({len(raw_text)} chars): [{raw_text}]")
 
@@ -214,6 +229,7 @@ def run_llm(messages: list[dict], thinking: bool = False, _retry: int = 0) -> di
         "raw": raw_text,
         "mood": mood,
         "tired": tired,
+        **facts,
     }
 
 

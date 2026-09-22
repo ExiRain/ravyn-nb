@@ -59,6 +59,15 @@ class Settings:
     QUEUE_REQUEST: str = _env("RAVYN_QUEUE_REQUEST", "ravyn.request")
     QUEUE_RESPONSE: str = _env("RAVYN_QUEUE_RESPONSE", "ravyn.response")
 
+    # --- Worker log ---
+    # What the model was asked and what it answered, before the filters —
+    # one JSON line per request in logs/worker-<date>-<time>.jsonl. The PC
+    # records what she SAID; this records why. See app/worker_log.py.
+    #
+    #     python tools/worker_report.py
+    WORKER_LOG_ENABLED: bool = _env_bool("RAVYN_WORKER_LOG", True)
+    WORKER_LOG_DIR: Path = Path(_env("RAVYN_WORKER_LOG_DIR", "logs"))
+
     # --- LLM request config (sent with every call) ---
     LLM_TEMP: float = _env_float("RAVYN_LLM_TEMP", 0.7)
     LLM_MAX_TOKENS: int = _env_int("RAVYN_LLM_MAX_TOKENS", 200)
@@ -85,6 +94,7 @@ class Settings:
             RABBIT_VHOST=self.RABBIT_VHOST,
             QUEUE_REQUEST=self.QUEUE_REQUEST,
             QUEUE_RESPONSE=self.QUEUE_RESPONSE,
+            WORKER_LOG_DIR=r(self.WORKER_LOG_DIR),
             LLM_TEMP=self.LLM_TEMP,
             LLM_MAX_TOKENS=self.LLM_MAX_TOKENS,
             LLM_THINKING=self.LLM_THINKING,
