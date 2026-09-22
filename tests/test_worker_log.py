@@ -247,12 +247,60 @@ def test_report_reads_it_back():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_games_are_marked_and_readable_one_at_a_time():
+    print("\n--- a log covering an evening, read a game at a time ---")
+    tmp = Path(tempfile.mkdtemp())
+    try:
+        log = worker_log.init(tmp, enabled=True)
+
+        def request(event_type="MyDeath", text="died"):
+            log.record(req_id=event_type, source="game",
+                       context=context(event_type=event_type), trigger=text,
+                       mode="improv", skip_llm=False,
+                       messages=messages(framed_prompt()), llm=llm(), said="x")
+
+        # game one: start, two deaths, end
+        log.mark("game_start", champion="Anivia")
+        request("GameStart"); request(); request()
+        log.mark("game_end")
+        # a chat line between games belongs to neither
+        request("chat")
+        # game two, still running when the log ends
+        log.mark("game_start", champion="Garen")
+        request("GameStart"); request()
+
+        lines, meta = worker_report.load(log.path)
+        games = meta["games"]
+
+        check("both games are found", len(games) == 2, str(games))
+        check("the first game holds its own requests",
+              len(worker_report.scope_to_game(lines, meta, 1)) == 3,
+              str(games[0]))
+        check("a line between games is in neither",
+              len(lines) == 6 and games[0]["end"] == 3
+              and games[1]["start"] == 4, str(games))
+        check("a game the log ends inside still closes",
+              games[1]["end"] == len(lines))
+        check("the champion rides along", games[0]["champion"] == "Anivia")
+        check("asking for a game that is not there is not fatal",
+              worker_report.scope_to_game(lines, meta, 9) == [])
+
+        scoped = worker_report.scope_to_game(lines, meta, 2)
+        check("scoping returns that game's records",
+              [r["req_id"] for r in scoped] == ["GameStart", "MyDeath"],
+              str([r["req_id"] for r in scoped]))
+        worker_report.report(scoped, dict(meta, games=[]), log.path)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main() -> int:
     test_records_the_whole_request()
     test_direction_landing()
     test_filters_and_quotes()
     test_never_raises()
     test_report_reads_it_back()
+    test_games_are_marked_and_readable_one_at_a_time()
 
     print()
     if FAILURES:

@@ -152,6 +152,14 @@ def start_worker():
         # client sends none and we make our own.
         req_id = context.get("req_id") or worker_log.new_request_id()
         started = time.time()
+
+        # The game boundaries arrive as ordinary signals. Marking them here
+        # costs nothing and lets this log be read a game at a time, the way
+        # the PC's is — before the record, so the first line of a game falls
+        # inside it.
+        if context.get("event_type") == "GameStart":
+            worker_log.get().mark("game_start",
+                                  champion=context.get("player_champion", ""))
         messages = []
         response = {}
         removed = []
@@ -263,6 +271,10 @@ def start_worker():
             "event_type": context.get("event_type", ""),
             "lang": context.get("lang", "en"),
         })
+
+        # After the record, so her last line of the game falls inside it.
+        if context.get("event_type") == "GameEnd":
+            worker_log.get().mark("game_end")
 
         try:
             channel.basic_publish(

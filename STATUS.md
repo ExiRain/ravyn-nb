@@ -196,8 +196,16 @@ the answer stored as a flag. Guessing it afterwards from block headings does
 not work — the angle has one (`YOUR ANGLE THIS TIME`), the tone and the
 situation are injected as bare text.
 
+**Games are marked, not split into files.** The worker has no idea what a game
+is — it answers requests — but the boundaries arrive on their own as
+`event_type`, so `GameStart` and `GameEnd` write markers into the same file.
+One file per run matches the PC's session log, and a game that ends in a crash
+keeps its first half rather than living in a file that was never closed. A
+game the log ends inside runs to the last line instead of being dropped.
+
 ```bash
 python tools/worker_report.py            # newest log
+python tools/worker_report.py --game 2   # the second game on its own
 python tools/worker_report.py --prompt   # the persona exactly as it ran
 python tools/worker_report.py --line 14  # one request: prompt, raw, said
 ```
@@ -215,7 +223,7 @@ work — only the join does.
 `logs/` is gitignored. The framed prompt contains viewer notes and chat
 history by name, so these files stay on the notebook.
 
-`python tests/test_worker_log.py` — 32 checks.
+`python tests/test_worker_log.py` — 39 checks.
 
 ---
 

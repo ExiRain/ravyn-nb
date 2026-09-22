@@ -64,6 +64,27 @@ class WorkerLog:
 
     # -----------------------------------------------------------------
 
+    def mark(self, name: str, **fields) -> None:
+        """
+        A boundary in the file — `game_start`, `game_end`.
+
+        The worker has no idea what a game is; it answers requests. But the
+        boundaries arrive on their own as `event_type`, so marking them costs
+        nothing and makes "what was the model being asked during that game"
+        answerable months later without counting timestamps by hand.
+
+        Markers, not a file per game: one file per run matches the PC's
+        session log, and a game that ends in a crash still has its first half
+        in the file rather than in a file that was never closed.
+        """
+        if not self.enabled:
+            return
+        try:
+            self._write({"kind": "marker", "marker": name, "t": time.time(),
+                         "iso": _iso(), **fields})
+        except Exception as e:
+            print(f"[worker-log] mark() failed: {e}")
+
     def record(self, *, req_id: str, source: str, context: dict,
                trigger: str, mode: str, skip_llm: bool,
                messages: list | None = None, llm: dict | None = None,

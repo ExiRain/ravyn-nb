@@ -5,6 +5,7 @@ What the model was asked, and what it did with it.
     python tools/worker_report.py logs/worker-x.jsonl
     python tools/worker_report.py --prompt         # the persona as it ran
     python tools/worker_report.py --line 14        # one request, in full
+    python tools/worker_report.py --game 2         # only the second game
 
 The PC's `analyze_session.py` measures how she sounded. This measures the
 pipeline behind it, and answers the questions that file cannot:
@@ -33,7 +34,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 def load(path: Path) -> tuple[list[dict], dict]:
+    """
+    Returns (line records, meta). `meta["games"]` is a list of the line-index
+    ranges between `game_start` and `game_end` markers, so a log covering a
+    whole evening can be read a game at a time.
+    """
     lines, meta = [], {}
+    games: list[dict] = []
+
     for raw in path.read_text(encoding="utf-8").splitlines():
         raw = raw.strip()
         if not raw:
@@ -42,11 +50,37 @@ def load(path: Path) -> tuple[list[dict], dict]:
             rec = json.loads(raw)
         except json.JSONDecodeError:
             continue
-        if rec.get("kind") == "line":
+
+        kind = rec.get("kind")
+        if kind == "line":
             lines.append(rec)
-        elif rec.get("kind") == "system_prompt":
+        elif kind == "system_prompt":
             meta["system_prompt"] = rec
+        elif kind == "marker":
+            if rec.get("marker") == "game_start":
+                games.append({"start": len(lines), "end": None,
+                              "champion": rec.get("champion", ""),
+                              "iso": rec.get("iso", "")})
+            elif rec.get("marker") == "game_end" and games:
+                games[-1]["end"] = len(lines)
+
+    # A game the log ends inside — crash, or a restart mid-game — runs to the
+    # last line rather than being dropped.
+    for game in games:
+        if game["end"] is None:
+            game["end"] = len(lines)
+
+    meta["games"] = games
     return lines, meta
+
+
+def scope_to_game(lines: list[dict], meta: dict, number: int) -> list[dict]:
+    games = meta.get("games") or []
+    if not 1 <= number <= len(games):
+        print(f"No game {number} in this log ({len(games)} recorded).")
+        return []
+    game = games[number - 1]
+    return lines[game["start"]:game["end"]]
 
 
 def newest() -> Path | None:
@@ -75,6 +109,15 @@ def report(lines: list[dict], meta: dict, path: Path) -> None:
     if errors:
         print(f"  errors           : {len(errors)}  "
               f"(first: {errors[0]['error'][:60]})")
+
+    games = meta.get("games") or []
+    if games:
+        spans = ", ".join(
+            f"{i + 1}: {g['end'] - g['start']} requests"
+            + (f" as {g['champion']}" if g["champion"] else "")
+            for i, g in enumerate(games))
+        print(f"  games            : {len(games)}  ({spans})")
+        print(f"                     --game N to read one on its own")
 
     if "system_prompt" in meta:
         print(f"  system prompt    : {meta['system_prompt']['chars']} chars "
@@ -214,6 +257,8 @@ def main() -> int:
                     help="print the system prompt this run used, and stop")
     ap.add_argument("--line", type=int, metavar="SEQ",
                     help="print one request in full — prompt, raw, said")
+    ap.add_argument("--game", type=int, metavar="N",
+                    help="report on the Nth game in this log only")
     args = ap.parse_args()
 
     path = Path(args.path) if args.path else newest()
@@ -239,6 +284,13 @@ def main() -> int:
 
     if args.line:
         print_line(lines, args.line)
+        return 0
+
+    if args.game:
+        scoped = scope_to_game(lines, meta, args.game)
+        if not scoped:
+            return 1
+        report(scoped, dict(meta, games=[]), path)
         return 0
 
     report(lines, meta, path)
