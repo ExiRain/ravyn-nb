@@ -4,6 +4,7 @@ import threading
 import time
 import pika
 from app.settings import get_settings
+from app import worker_log
 from adapters.llm.llama_server_client import run_llm, run_llm_simple
 from persona import filters
 from persona.context_builder import build_messages
@@ -120,6 +121,11 @@ def start_worker():
     channel.queue_declare(queue=settings.QUEUE_REQUEST)
     channel.queue_declare(queue=settings.QUEUE_RESPONSE)
 
+    # Opened before the first message: a request handled before this exists
+    # is a line missing from the record. See app/worker_log.py.
+    worker_log.init(settings.WORKER_LOG_DIR,
+                    enabled=settings.WORKER_LOG_ENABLED)
+
     print("RabbitMQ connected — waiting for messages")
 
     def callback(ch, method, properties, body):
@@ -141,6 +147,23 @@ def start_worker():
         spoken_text = ""
         mood = None
         tired = None
+
+        # The PC stamps this so its record and ours join exactly; an older
+        # client sends none and we make our own.
+        req_id = context.get("req_id") or worker_log.new_request_id()
+        started = time.time()
+
+        # The game boundaries arrive as ordinary signals. Marking them here
+        # costs nothing and lets this log be read a game at a time, the way
+        # the PC's is — before the record, so the first line of a game falls
+        # inside it.
+        if context.get("event_type") == "GameStart":
+            worker_log.get().mark("game_start",
+                                  champion=context.get("player_champion", ""))
+        messages = []
+        response = {}
+        removed = []
+        failure = ""
 
         try:
             if skip_llm:
@@ -191,6 +214,8 @@ def start_worker():
                 result = filters.clean(spoken_text, TALLY)
                 spoken_text = result.text
 
+                removed = list(result.removed)
+
                 if result.changed:
                     what = ", ".join(result.removed)
                     if spoken_text:
@@ -226,7 +251,17 @@ def start_worker():
 
         except Exception as e:
             # still fall through to publish — the PC must always get a reply
+            failure = str(e)
             print(f"[{_ts()}][worker] ERROR: {e}")
+
+        # Written before the publish, so a line that failed to reach the PC is
+        # still in the record — that is exactly the case worth finding later.
+        worker_log.get().record(
+            req_id=req_id, source=source, context=context, trigger=text,
+            mode=mode, skip_llm=skip_llm, messages=messages, llm=response,
+            said=spoken_text, removed=removed, mood=mood, tired=tired,
+            total_s=time.time() - started, error=failure,
+        )
 
         response_payload = json.dumps({
             "text": spoken_text,
@@ -236,6 +271,10 @@ def start_worker():
             "event_type": context.get("event_type", ""),
             "lang": context.get("lang", "en"),
         })
+
+        # After the record, so her last line of the game falls inside it.
+        if context.get("event_type") == "GameEnd":
+            worker_log.get().mark("game_end")
 
         try:
             channel.basic_publish(
