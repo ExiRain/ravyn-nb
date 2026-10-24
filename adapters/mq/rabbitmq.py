@@ -150,6 +150,20 @@ def start_worker():
 
         # The PC stamps this so its record and ours join exactly; an older
         # client sends none and we make our own.
+        # A donation leaves a note on whoever sent it, whether or not the
+        # message itself is read — it happened, and she should know them as
+        # someone who has paid for something. Before the skip_llm branch,
+        # because a donation IS a quote signal: the PC sanitises the message
+        # and sends it straight to TTS, so nothing below would see it.
+        donation = context.get("donation")
+        if isinstance(donation, dict) and context.get("user"):
+            try:
+                memory.note_donation(context["user"],
+                                     donation.get("amount", 0),
+                                     donation.get("currency", "$"))
+            except Exception as e:
+                print(f"[{_ts()}][worker] Donation note failed: {e}")
+
         req_id = context.get("req_id") or worker_log.new_request_id()
         started = time.time()
 
@@ -178,7 +192,9 @@ def start_worker():
                 mood = context.get("mood_spike")
             else:
                 user = context.get("user", "")
-                user_notes = memory.get_user_notes(user) if user else ""
+                # Prose note plus the donation fact. get_user_notes() stays
+                # prose-only — it feeds the compression prompt.
+                user_notes = memory.notes_for_prompt(user) if user else ""
 
                 messages = build_messages(
                     text=text, source=source, context=context,

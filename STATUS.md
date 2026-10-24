@@ -114,8 +114,10 @@ supposed to sit alongside.
 `python tests/test_game_memory.py` — 15 checks.
 `python tests/test_persona_context.py` — 31 checks, including that no
 scaffolding reaches memory and that her appearance carries its narration rule.
-`python tests/test_per_user_memory.py` — 31 checks: threads do not mix, notes
-are written from one person's words, eviction is bounded.
+`python tests/test_per_user_memory.py` — 46 checks: threads do not mix, notes
+are written from one person's words, eviction is bounded, a fresh run carries
+no record of the last one, and a donation leaves one sentence that stays one
+sentence.
 
 ---
 
@@ -423,6 +425,57 @@ client that sends no flag.
 nothing new here: set `context["user"]` and `context["is_owner"]` and it gets
 the same framing and the same per-person memory buffer.
 
+### Every run she is a new person — except about people
+
+The streamer's words: *"every time I start her, she's a new person with no
+record of last games, we start a fresh game session with mood."*
+
+Her temper lives in memory on the PC and dies with the process, so that half
+was already true. This side contradicted it: `_load` restored
+`general_memory`, which is *"what has been happening on this stream"* — so
+last night's losing session arrived in the system prompt of tonight's first
+line. STATUS already recorded this biting once, a mock game leaving *"Ravyn
+and multiple viewers discussed Team K deaths"* in the file to be repeated at a
+live audience.
+
+`general_memory` is now **neither loaded nor saved**. It is live for the length
+of a run and nothing reads it back, so writing it would only leave a stale
+summary in the file to confuse whoever opens it next.
+
+**Who people are does survive**, which is a different thing: a regular who
+donated last week should still be someone she knows.
+
+| | survives a restart |
+|---|---|
+| temper, mood, games this session | no — PC, in memory |
+| conversation history, her recent game lines | no |
+| rolling stream summary (`general_memory`) | **no, by design** |
+| per-person notes (`user_notes`) | yes |
+| who has donated (`donors`) | yes |
+
+**A donation leaves a small note.** `donors` is kept apart from the prose
+notes on purpose: those are written by the model and rewritten every few
+exchanges, and a fact she must never get wrong — that this person has paid for
+something three times — does not belong anywhere a model can edit it. It is
+**counted, not appended**: one sentence, rewritten each time, the same length
+at the fiftieth donation as at the first, where a line per donation would grow
+past the note cap and push out everything she actually knows about them.
+
+```
+They have donated 3 times, $15.5 in total, most recently $3.5.
+```
+
+`notes_for_prompt()` is prose plus that sentence and is what the worker sends.
+`get_user_notes()` stays prose-only because it feeds the compression prompt —
+handing the model the donation sentence as "current notes" would have it
+rewritten into prose, counted twice, and slowly corrupted.
+
+The worker writes the note from `context["donation"]` on the incoming signal,
+**before** the `skip_llm` branch: a donation is a quote signal, so the PC
+sanitises the message and sends it straight to TTS and nothing further down
+would ever see it. The PC half — which service the money arrives through — is
+still open.
+
 ### `data/memory.json` is runtime state, not source
 
 It is **gitignored**, and was tracked until it caused its first merge conflict.
@@ -436,10 +489,11 @@ have carried a phantom memory of a mock game into a live stream.
 Shape, for when it needs checking by eye:
 
 ```json
-{ "general_memory": "", "user_notes": {}, "mood_attribution": {}, "last_updated": 0 }
+{ "user_notes": {}, "donors": {}, "last_updated": 0 }
 ```
 
-All four keys, `user_notes` keyed by lowercase name. It regenerates on first
+Both maps keyed by lowercase name. `general_memory` is **not** in here any
+more — see above. It regenerates on first
 run, so **deleting it is always a safe reset** — and the right move after any
 mock or `--test` session, since nothing in it is worth keeping and all of it
 reaches the prompt.
