@@ -74,6 +74,13 @@ class MemoryManager:
         self.exchange_counts: dict[str, int] = {}
         self.general_memory = ""
         self.user_notes: dict[str, str] = {}
+
+        # Who has paid for something, and how often. Kept apart from the prose
+        # notes on purpose: those are written by the model and rewritten every
+        # few exchanges, and a fact she should never get wrong — that this
+        # person has donated three times — does not belong anywhere a model
+        # can edit it.
+        self.donors: dict[str, dict] = {}
         self.recent_openers: deque[str] = deque(maxlen=MAX_OPENING_TRACK)
         # Deliberately not persisted: it is scoped to the game being played,
         # and a restart is a new game.
@@ -241,6 +248,60 @@ Write ONLY the summary, nothing else."""
         self.user_notes[key] = truncated
         self._save()
 
+    def note_donation(self, user: str, amount: float,
+                      currency: str = "$") -> None:
+        """
+        A donation leaves a small, permanent note on whoever sent it.
+
+        Counted rather than appended: a line per donation would grow past the
+        note cap and push out everything she actually knows about them. One
+        sentence, rewritten each time, stays the same length at the fiftieth
+        donation as at the first.
+        """
+        if not user:
+            return
+
+        key = user.lower()
+        record = self.donors.get(key, {"count": 0, "total": 0.0})
+        record["count"] = record.get("count", 0) + 1
+        record["total"] = round(record.get("total", 0.0) + float(amount), 2)
+        record["last_amount"] = float(amount)
+        record["currency"] = currency
+        record["last"] = time.strftime("%Y-%m-%d")
+        self.donors[key] = record
+        self._save()
+        print(f"[memory] {user}: donation #{record['count']}, "
+              f"{currency}{record['total']} total")
+
+    def donor_line(self, user: str) -> str:
+        """One sentence about their donations, or nothing."""
+        record = self.donors.get((user or "").lower())
+        if not record or not record.get("count"):
+            return ""
+
+        currency = record.get("currency", "$")
+        count = record["count"]
+        if count == 1:
+            return (f"They have donated once, "
+                    f"{currency}{record.get('last_amount', 0):g}.")
+        return (f"They have donated {count} times, "
+                f"{currency}{record.get('total', 0):g} in total, "
+                f"most recently {currency}{record.get('last_amount', 0):g}.")
+
+    def notes_for_prompt(self, user: str) -> str:
+        """
+        What she knows about them, for the prompt: the prose note plus the
+        donation fact.
+
+        Separate from `get_user_notes` because that one feeds the compression
+        prompt — handing the model the donation sentence as "current notes"
+        would have it rewritten into prose, then counted twice, then slowly
+        corrupted.
+        """
+        parts = [p for p in (self.get_user_notes(user), self.donor_line(user))
+                 if p]
+        return " ".join(parts)
+
     def get_user_note_compression_prompt(self, user: str) -> str:
         """Build prompt to compress/update a user's notes."""
 
@@ -274,9 +335,13 @@ Write ONLY the updated notes, nothing else."""
     # ---------------------------------------------------------
 
     def _save(self):
+        # general_memory is deliberately NOT written: it is live for the
+        # length of a run and nothing reads it back, so persisting it would
+        # only leave a stale summary in the file to confuse the next person
+        # who opens it by hand.
         data = {
-            "general_memory": self.general_memory,
             "user_notes": self.user_notes,
+            "donors": self.donors,
             "last_updated": time.time(),
         }
         try:
@@ -294,9 +359,21 @@ Write ONLY the updated notes, nothing else."""
         try:
             with open(MEMORY_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            self.general_memory = data.get("general_memory", "")
+
+            # NOT general_memory. Every run she is a new person with no record
+            # of the last one — the streamer's words, and the right call: that
+            # summary is "what has been happening on this stream", so
+            # restoring it carries last night's losing session into the system
+            # prompt of tonight's first line. STATUS records this biting once,
+            # a mock game leaving "Ravyn and multiple viewers discussed Team K
+            # deaths" in there to be repeated at a live audience.
+            #
+            # Who people ARE does survive, which is a different thing: a
+            # regular who donated last week should still be someone she knows.
             self.user_notes = data.get("user_notes", {})
+            self.donors = data.get("donors", {})
             print(f"[memory] Loaded — {len(self.user_notes)} user notes, "
-                  f"memory: {self.general_memory[:50] or 'empty'}...")
+                  f"{len(self.donors)} donor(s). The stream summary starts "
+                  f"empty by design.")
         except Exception as e:
             print(f"[memory] Load failed: {e}")
