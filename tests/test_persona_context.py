@@ -24,7 +24,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from persona.context_builder import (                     # noqa: E402
-    APPEARANCE_BLOCK, build_messages,
+    APPEARANCE_BLOCK, LEAGUE_HEADINGS, SYSTEM_PROMPT, SYSTEM_PROMPT_NO_LEAGUE,
+    build_messages,
 )
 from persona.memory import MemoryManager                  # noqa: E402
 
@@ -184,12 +185,60 @@ def test_chat_does_not_tunnel_into_the_game():
           "not the only thing you are" in system)
 
 
+def test_a_stream_that_is_not_league():
+    """
+    `ravyn-lynx-p/STATUS.md` §7 records the League section as the gravity well
+    that pulls every other subject back to the game. On a stream that is not
+    League that is not merely useless, it is actively wrong — so the PC stamps
+    `league_mode` on every request and those blocks come out.
+    """
+    print("\n--- her persona without the game ---")
+
+    check("the full persona has the game blocks",
+          all(h in SYSTEM_PROMPT for h in LEAGUE_HEADINGS))
+    check("and the stripped one has none of them",
+          not any(h in SYSTEM_PROMPT_NO_LEAGUE for h in LEAGUE_HEADINGS),
+          str([h for h in LEAGUE_HEADINGS if h in SYSTEM_PROMPT_NO_LEAGUE]))
+
+    # Everything that is HER rather than the game has to survive, or the flag
+    # is not a mode, it is a different character.
+    for kept in ("PERSONALITY:", "VOICE AND SPEECH:", "HUMOR:",
+                 "ANTI-REPETITION:", "HARD RULES:", "MOOD AND EMOTION:"):
+        check(f"{kept} survives", kept in SYSTEM_PROMPT_NO_LEAGUE, kept)
+
+    check("so she is still mostly herself",
+          len(SYSTEM_PROMPT_NO_LEAGUE) > len(SYSTEM_PROMPT) * 0.6,
+          f"{len(SYSTEM_PROMPT_NO_LEAGUE)} of {len(SYSTEM_PROMPT)}")
+
+    chat = {"trigger": "chat_message", "user": "someone",
+            "league_mode": False}
+    plain = build_messages("nice jacket", "chat", chat,
+                           history=[])[0]["content"]
+    check("a non-League request carries no League persona",
+          "LEAGUE OF LEGENDS:" not in plain)
+    check("nor the teammate vocabulary, which only exists in a game",
+          "TEAMMATES:" not in plain)
+
+    league = build_messages("nice jacket", "chat",
+                            {"trigger": "chat_message", "user": "someone",
+                             "league_mode": True}, history=[])[0]["content"]
+    check("a League request still carries it",
+          "LEAGUE OF LEGENDS:" in league)
+
+    older = build_messages("nice jacket", "chat",
+                           {"trigger": "chat_message", "user": "someone"},
+                           history=[])[0]["content"]
+    check("and a client that sends no flag behaves as it always did",
+          "LEAGUE OF LEGENDS:" in older)
+
+
 def main():
     test_scaffolding_reaches_the_prompt()
     test_scaffolding_never_enters_memory()
     test_appearance()
     test_viewer_notes_reach_the_prompt()
     test_chat_does_not_tunnel_into_the_game()
+    test_a_stream_that_is_not_league()
 
     print()
     if FAILURES:

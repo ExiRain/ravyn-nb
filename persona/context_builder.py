@@ -9,6 +9,35 @@ from persona.context_templates import *
 PERSONA_DIR = Path(__file__).parent
 SYSTEM_PROMPT = (PERSONA_DIR / "system_prompt.txt").read_text(encoding="utf-8").strip()
 
+# Blocks of her persona that only make sense while a game is on. On a stream
+# that is not League they are not merely useless — `ravyn-lynx-p/STATUS.md` §7
+# records the League section as the gravity well that pulls every other
+# subject back to the game, so on an art stream it is actively wrong.
+#
+# Matched on the heading, so editing the prose inside a block cannot silently
+# detach it from this list. Add a heading here and the block goes with it.
+LEAGUE_HEADINGS = (
+    "TEAMMATES:",
+    "LEAGUE OF LEGENDS:",
+    "CRITICAL GAME EVENT RULE:",
+)
+
+
+def _without_league(prompt: str) -> str:
+    """
+    Her persona with the game-only blocks removed.
+
+    Blocks are separated by blank lines in `system_prompt.txt`, which is how
+    the file is already written — so this is a filter over that structure
+    rather than a second parser for it.
+    """
+    kept = [block for block in prompt.split("\n\n")
+            if not block.lstrip().startswith(LEAGUE_HEADINGS)]
+    return "\n\n".join(kept)
+
+
+SYSTEM_PROMPT_NO_LEAGUE = _without_league(SYSTEM_PROMPT)
+
 
 def _load_appearance() -> str:
     """
@@ -56,7 +85,11 @@ def build_messages(
     recent_openers: str = "",
 ) -> list[dict]:
 
-    system_parts = [SYSTEM_PROMPT]
+    # The PC stamps `league_mode` on every request (its dispatcher does it, so
+    # no source can forget). Absent means an older client, and the League
+    # persona stays in — the behaviour it has always had.
+    league = context.get("league_mode", True)
+    system_parts = [SYSTEM_PROMPT if league else SYSTEM_PROMPT_NO_LEAGUE]
 
     if APPEARANCE_BLOCK:
         system_parts.append(APPEARANCE_BLOCK)
