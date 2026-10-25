@@ -112,7 +112,9 @@ compression — a game produces dozens and they would crowd out the chat they ar
 supposed to sit alongside.
 
 `python tests/test_game_memory.py` — 15 checks.
-`python tests/test_persona_context.py` — 31 checks, including that no
+`python tests/test_persona_context.py` — 51 checks, including the League
+blocks coming out on a variety stream and everything that is her surviving
+that, and that no
 scaffolding reaches memory and that her appearance carries its narration rule.
 `python tests/test_per_user_memory.py` — 46 checks: threads do not mix, notes
 are written from one person's words, eviction is bounded, a fresh run carries
