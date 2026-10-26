@@ -9,6 +9,7 @@ from adapters.llm.llama_server_client import run_llm, run_llm_simple
 from persona import filters
 from persona.context_builder import build_messages
 from persona.memory import MemoryManager
+from persona.repeats import RepeatGuard
 
 settings = get_settings()
 memory = MemoryManager()
@@ -96,6 +97,79 @@ def _gate_fufu(text: str, source: str) -> str:
 
     _response_count_since_fufu += 1
     return text
+
+
+def _finish(raw: str, source: str) -> tuple[str, list[str]]:
+    """
+    Everything between the model and the TTS, counted as it goes — see
+    persona/filters.py. The tally is what turns "she felt off today" into a
+    number that moves when a prompt changes.
+    """
+    text = _gate_fufu(raw, source)
+    text = _gate_tch(text)
+
+    before = text
+    result = filters.clean(text, TALLY)
+    if result.changed:
+        what = ", ".join(result.removed)
+        if result.text:
+            print(f"[{_ts()}][worker] Cleaned [{what}] -> {result.text[:60]}")
+        else:
+            print(f"[{_ts()}][worker] ALL {what}, saying nothing: "
+                  f"{before[:80]}")
+
+    if TALLY.responses % FILTER_REPORT_EVERY == 0:
+        print(f"[{_ts()}][filters] {TALLY.summary()}")
+    return result.text, list(result.removed)
+
+
+# Her own lines, checked against everything she has said this session. Only
+# where dropping a line costs nothing: a skipped dragon comment is never
+# noticed, a repeated one is. Never chat — a viewer who asks twice is owed an
+# answer twice.
+REPEAT_GUARDED = {"game", "silence_filler"}
+
+# Retried but never dropped: a game with no opening or closing word from her
+# reads as broken, which is worse than a familiar phrase.
+MUST_LAND = {"GameStart", "GameEnd"}
+
+REPEATS = RepeatGuard()
+
+
+def _avoid_repeat(line: str, messages: list, context: dict, trigger: str,
+                  source: str) -> tuple[str, dict | None, str]:
+    """
+    (line to speak, the retry's LLM response or None, what happened or "").
+
+    One retry, told exactly what it repeated. If that repeats too the line is
+    dropped — unless it is one of MUST_LAND, which keeps the retry.
+    """
+    given = " ".join([trigger or ""] + [
+        str(context.get(k) or "") for k in ("player_notes", "situation",
+                                            "teammate_words", "angle")])
+    echo = REPEATS.echo(line, given)
+    if not echo:
+        return line, None, ""
+
+    print(f"[{_ts()}][worker] Repeat of {echo} — asking once more")
+    note = (f"\n\nYou were about to repeat {echo}, which you have already "
+            f"said tonight. Say something different about this — a "
+            f"different detail, in different words.")
+    retry_messages = [dict(m) for m in messages]
+    retry_messages[-1]["content"] = retry_messages[-1]["content"] + note
+
+    retry = run_llm(retry_messages, thinking=settings.LLM_THINKING)
+    candidate, _ = _finish(retry.get("text", ""), source)
+
+    if candidate and not REPEATS.echo(candidate, given):
+        print(f"[{_ts()}][worker] Fresh on retry: {candidate[:80]}")
+        return candidate, retry, "repeat_retried"
+    if context.get("event_type") in MUST_LAND:
+        print(f"[{_ts()}][worker] Still a repeat, kept — "
+              f"{context.get('event_type')} must land")
+        return candidate or line, retry, "repeat_kept"
+    print(f"[{_ts()}][worker] Still a repeat — saying nothing")
+    return "", retry, "repeat_dropped"
 
 
 def start_worker():
@@ -220,29 +294,21 @@ def start_worker():
 
                 print(f"[{_ts()}][worker] Ravyn: {spoken_text[:80]}")
 
-                spoken_text = _gate_fufu(spoken_text, source)
-                spoken_text = _gate_tch(spoken_text)
+                spoken_text, removed = _finish(spoken_text, source)
 
-                # Everything between the model and the TTS, counted as it goes
-                # — see persona/filters.py. The tally is what turns "she felt
-                # off today" into a number that moves when a prompt changes.
-                before = spoken_text
-                result = filters.clean(spoken_text, TALLY)
-                spoken_text = result.text
-
-                removed = list(result.removed)
-
-                if result.changed:
-                    what = ", ".join(result.removed)
-                    if spoken_text:
-                        print(f"[{_ts()}][worker] Cleaned [{what}] -> "
-                              f"{spoken_text[:60]}")
-                    else:
-                        print(f"[{_ts()}][worker] ALL {what}, saying nothing: "
-                              f"{before[:80]}")
-
-                if TALLY.responses % FILTER_REPORT_EVERY == 0:
-                    print(f"[{_ts()}][filters] {TALLY.summary()}")
+                # Enforced, not asked: the prompt's "already said" list did
+                # not stop an 18.8% echo rate. See persona/repeats.py.
+                if spoken_text and source in REPEAT_GUARDED:
+                    spoken_text, retry, how = _avoid_repeat(
+                        spoken_text, messages, context, text, source)
+                    if how:
+                        removed.append(how)
+                    if retry:
+                        response = retry
+                        mood = retry.get("mood") if retry.get("mood") is not None else mood
+                        tired = retry.get("tired") if retry.get("tired") is not None else tired
+                if spoken_text and source in REPEAT_GUARDED:
+                    REPEATS.add(spoken_text)
 
                 # update memory
                 if spoken_text:
