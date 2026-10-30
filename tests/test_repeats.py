@@ -130,6 +130,13 @@ def test_the_worker_policy():
     check("but a game start is never left silent",
           line and how == "repeat_kept", f"{line!r} {how}")
 
+    line, _, how = worker._avoid_repeat(repeat, messages,
+                                        {"event_type": "DragonKill",
+                                         "must_land": True},
+                                        "They took soul.", "game")
+    check("nor anything the PC flags must_land — soul, Baron",
+          line and how == "repeat_kept", f"{line!r} {how}")
+
     sent.clear()
     line, retry, how = worker._avoid_repeat(
         "Two kills on Jhin, and the CS line is clean.", messages,

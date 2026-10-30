@@ -164,7 +164,9 @@ def _avoid_repeat(line: str, messages: list, context: dict, trigger: str,
     if candidate and not REPEATS.echo(candidate, given):
         print(f"[{_ts()}][worker] Fresh on retry: {candidate[:80]}")
         return candidate, retry, "repeat_retried"
-    if context.get("event_type") in MUST_LAND:
+    # Or flagged by the PC: soul and Baron. On 2026-10-30 "they just took
+    # soul" was dropped as a repeat.
+    if context.get("must_land") or context.get("event_type") in MUST_LAND:
         print(f"[{_ts()}][worker] Still a repeat, kept — "
               f"{context.get('event_type')} must land")
         return candidate or line, retry, "repeat_kept"
