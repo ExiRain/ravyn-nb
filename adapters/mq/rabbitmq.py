@@ -268,9 +268,15 @@ def start_worker():
                 mood = context.get("mood_spike")
             else:
                 user = context.get("user", "")
+                # Memory is keyed per platform where the PC sends a key:
+                # YouTube's "Bob" is "youtube:<channel id>", never Twitch's
+                # bob. Twitch sends none, so its existing memories still key
+                # by login exactly as before.
+                who = context.get("user_key") or user
+                memory.remember_name(who, user)
                 # Prose note plus the donation fact. get_user_notes() stays
                 # prose-only — it feeds the compression prompt.
-                user_notes = memory.notes_for_prompt(user) if user else ""
+                user_notes = memory.notes_for_prompt(who) if user else ""
 
                 messages = build_messages(
                     text=text, source=source, context=context,
@@ -278,7 +284,7 @@ def start_worker():
                     # answering one viewer while carrying another's thread.
                     # Game events carry none at all, and their own
                     # anti-repetition block — see persona/memory.py.
-                    history=memory.get_history(source, user),
+                    history=memory.get_history(source, who),
                     general_memory=memory.general_memory,
                     user_memory=user_notes,
                     recent_openers=memory.get_repetition_guard(source),
@@ -325,13 +331,13 @@ def start_worker():
                     else:
                         memory.add_exchange(
                             user_msg=text, assistant_msg=spoken_text,
-                            source=source, user=user)
+                            source=source, user=who)
 
                         # Per person too: notes are written from that
                         # person's messages when THEY have said enough, not
                         # when the room has.
-                        if memory.needs_compression(user):
-                            _compress_memory_async(user)
+                        if memory.needs_compression(who):
+                            _compress_memory_async(who)
 
         except Exception as e:
             # still fall through to publish — the PC must always get a reply
