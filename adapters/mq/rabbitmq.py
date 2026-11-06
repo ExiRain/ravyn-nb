@@ -277,6 +277,12 @@ def start_worker():
                 # Prose note plus the donation fact. get_user_notes() stays
                 # prose-only — it feeds the compression prompt.
                 user_notes = memory.notes_for_prompt(who) if user else ""
+                # Chat only: a viewer's first message tonight opens with a
+                # hello. Voice is the streamer, and events have their own
+                # welcome lines.
+                greet = (source == "chat" and bool(user)
+                         and not context.get("is_owner")
+                         and memory.needs_greeting(who))
 
                 messages = build_messages(
                     text=text, source=source, context=context,
@@ -288,6 +294,7 @@ def start_worker():
                     general_memory=memory.general_memory,
                     user_memory=user_notes,
                     recent_openers=memory.get_repetition_guard(source),
+                    greet=greet,
                 )
 
                 response = run_llm(messages, thinking=settings.LLM_THINKING)
@@ -329,6 +336,8 @@ def start_worker():
                             memory.clear_game_lines()   # before, not after
                         memory.add_game_line(spoken_text)
                     else:
+                        if greet:
+                            memory.mark_greeted(who)
                         memory.add_exchange(
                             user_msg=text, assistant_msg=spoken_text,
                             source=source, user=who)

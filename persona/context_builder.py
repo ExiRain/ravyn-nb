@@ -85,6 +85,7 @@ def build_messages(
     general_memory: str = "",
     user_memory: str = "",
     recent_openers: str = "",
+    greet: bool = False,
 ) -> list[dict]:
 
     # The PC stamps `league_mode` on every request (its dispatcher does it, so
@@ -124,7 +125,7 @@ def build_messages(
 
     system_message = "\n\n".join(system_parts)
 
-    user_message = _frame_signal(text, source, context, user_memory)
+    user_message = _frame_signal(text, source, context, user_memory, greet)
 
     messages = [{"role": "system", "content": system_message}]
     for entry in history:
@@ -142,7 +143,8 @@ def _build_recent_chat_block(context: dict) -> str:
     return RECENT_CHAT_BLOCK.format(lines=lines)
 
 
-def _frame_signal(text: str, source: str, context: dict, user_memory: str) -> str:
+def _frame_signal(text: str, source: str, context: dict, user_memory: str,
+                  greet: bool = False) -> str:
     user = context.get("user", "")
     trigger = context.get("trigger", "")
     event_type = context.get("event_type", "")
@@ -182,9 +184,14 @@ def _frame_signal(text: str, source: str, context: dict, user_memory: str) -> st
         who = user or "someone"
         if platform != "twitch":
             who = f"{who}, on {PLATFORM_NAMES.get(platform, platform)},"
+        # Her first answer to them tonight says hello. Owner excluded above:
+        # he is not a viewer arriving, and is framed as her person instead.
+        greeting = ""
+        if greet and user:
+            greeting = (GREET_REGULAR if user_memory else GREET_NEW).format(user=user)
         return CHAT_MESSAGE.format(
-            user=who, message=text,
-            user_notes=user_notes, recent_chat_block=recent_chat_block,
+            user=who, message=text, user_notes=user_notes,
+            greeting=greeting, recent_chat_block=recent_chat_block,
         )
 
     # --- Twitch events ---
