@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from persona.context_templates import *
 
+PLATFORM_NAMES = {"youtube": "YouTube", "twitch": "Twitch"}
+
 PERSONA_DIR = Path(__file__).parent
 SYSTEM_PROMPT = (PERSONA_DIR / "system_prompt.txt").read_text(encoding="utf-8").strip()
 
@@ -174,8 +176,14 @@ def _frame_signal(text: str, source: str, context: dict, user_memory: str) -> st
         if is_owner:
             return CHAT_EXILED.format(message=text,
                                       recent_chat_block=recent_chat_block)
+        # Twitch is the default and says nothing; any other platform is
+        # named, so "Bob" on YouTube is not taken for a Twitch bob.
+        platform = context.get("platform") or "twitch"
+        who = user or "someone"
+        if platform != "twitch":
+            who = f"{who}, on {PLATFORM_NAMES.get(platform, platform)},"
         return CHAT_MESSAGE.format(
-            user=user or "someone", message=text,
+            user=who, message=text,
             user_notes=user_notes, recent_chat_block=recent_chat_block,
         )
 

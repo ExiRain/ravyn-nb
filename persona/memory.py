@@ -74,6 +74,11 @@ class MemoryManager:
         self.exchange_counts: dict[str, int] = {}
         self.general_memory = ""
         self.user_notes: dict[str, str] = {}
+        # user key -> the name to write about them by. A YouTube viewer is
+        # keyed by channel id ("youtube:UC..."), because display names there
+        # are not unique and must not merge with a Twitch login of the same
+        # name — but the note-writer should still see "Bob", not the id.
+        self.display_names: dict[str, str] = {}
 
         # Who has paid for something, and how often. Kept apart from the prose
         # notes on purpose: those are written by the model and rewritten every
@@ -302,24 +307,29 @@ Write ONLY the summary, nothing else."""
                  if p]
         return " ".join(parts)
 
+    def remember_name(self, key: str, name: str) -> None:
+        if key and name:
+            self.display_names[self._key(key)] = name
+
     def get_user_note_compression_prompt(self, user: str) -> str:
         """Build prompt to compress/update a user's notes."""
 
         current = self.get_user_notes(user)
+        name = self.display_names.get(self._key(user), user)
 
         # ONLY this person's messages. Building from the shared buffer was the
         # bug: with five viewers talking, the fifth one's notes were written
         # from a transcript containing all five, so she remembered other
         # people's personalities as theirs.
         recent_interactions = [
-            f"{'Ravyn' if msg['role'] == 'assistant' else user}: {msg['content']}"
+            f"{'Ravyn' if msg['role'] == 'assistant' else name}: {msg['content']}"
             for msg in self.histories.get(self._key(user), ())
         ]
 
         conversation = ("\n".join(recent_interactions)
                         if recent_interactions else "No recent interaction.")
 
-        prompt = f"""Update these notes about the viewer "{user}" based on recent interaction. Keep it under 2 sentences. Focus on personality traits, interests, and how Ravyn feels about them.
+        prompt = f"""Update these notes about the viewer "{name}" based on recent interaction. Keep it under 2 sentences. Focus on personality traits, interests, and how Ravyn feels about them.
 
 Current notes: {current or 'New viewer, no notes yet.'}
 

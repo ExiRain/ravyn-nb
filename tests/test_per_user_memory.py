@@ -284,7 +284,47 @@ def test_donations_leave_a_small_note():
         shutil.rmtree(temp.parent, ignore_errors=True)
 
 
+def test_youtube_bob_is_not_twitch_bob():
+    """
+    The PC keys YouTube viewers by channel id ("youtube:<id>"): display names
+    there are not unique and must not merge with a Twitch login of the same
+    name. The note-writer still writes about them by name.
+    """
+    print("\n--- one name on two platforms is two people ---")
+    from persona.context_builder import build_messages
+
+    m = fresh()
+    m.add_exchange("hi from twitch", "Hm.", "chat", "bob")
+    m.remember_name("youtube:UCbob", "Bob")
+    m.add_exchange("hi from youtube", "Hello.", "chat", "youtube:UCbob")
+
+    check("Twitch bob keeps only his own thread",
+          [e["content"] for e in m.get_history("chat", "bob")]
+          == ["hi from twitch", "Hm."])
+    check("YouTube Bob has his own",
+          [e["content"] for e in m.get_history("chat", "youtube:UCbob")]
+          == ["hi from youtube", "Hello."])
+
+    prompt = m.get_user_note_compression_prompt("youtube:UCbob")
+    check("notes are written about 'Bob', not the channel id",
+          'viewer "Bob"' in prompt and "UCbob" not in prompt, prompt[:80])
+
+    msgs = build_messages(text="hi from youtube", source="chat",
+                          context={"user": "Bob", "platform": "youtube",
+                                   "user_key": "youtube:UCbob",
+                                   "is_owner": False}, history=[])
+    check("she is told the viewer is on YouTube",
+          "Bob, on YouTube," in msgs[-1]["content"], msgs[-1]["content"][:80])
+    msgs = build_messages(text="hi", source="chat",
+                          context={"user": "bob", "is_owner": False},
+                          history=[])
+    check("a Twitch message reads exactly as before",
+          "A viewer named bob says" in msgs[-1]["content"],
+          msgs[-1]["content"][:80])
+
+
 def main():
+    test_youtube_bob_is_not_twitch_bob()
     test_threads_do_not_mix()
     test_notes_are_written_from_one_persons_words()
     test_note_trigger_is_per_person()
