@@ -245,6 +245,25 @@ def start_worker():
     worker_log.init(settings.WORKER_LOG_DIR,
                     enabled=settings.WORKER_LOG_ENABLED)
 
+    # Send the log to the PC as well, on the same channel: the worker is one
+    # thread, and every log line is written inside the callback that owns
+    # this channel. The PC files them under logs/nb/ — see
+    # ravyn-lynx-p/services/log_receiver.py. The arguments must match the
+    # PC's declaration exactly, or RabbitMQ refuses the second one.
+    if settings.WORKER_LOG_SHIP:
+        channel.queue_declare(queue=settings.QUEUE_LOG, arguments={
+            "x-max-length": settings.LOG_QUEUE_MAX,
+            "x-overflow": "drop-head"})
+
+        def _ship(file_name: str, line: str) -> None:
+            channel.basic_publish(
+                exchange="", routing_key=settings.QUEUE_LOG,
+                body=json.dumps({"file": file_name, "line": line},
+                                ensure_ascii=False).encode("utf-8"))
+
+        worker_log.get().attach_sink(_ship)
+        print(f"[worker-log] Also sending to the PC on {settings.QUEUE_LOG}")
+
     print("RabbitMQ connected — waiting for messages")
 
     def callback(ch, method, properties, body):

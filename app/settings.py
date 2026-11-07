@@ -68,6 +68,15 @@ class Settings:
     WORKER_LOG_ENABLED: bool = _env_bool("RAVYN_WORKER_LOG", True)
     WORKER_LOG_DIR: Path = Path(_env("RAVYN_WORKER_LOG_DIR", "logs"))
 
+    # Every worker-log line is ALSO sent to the PC on this queue, so both
+    # halves of a session end up in one place: the PC writes them to
+    # logs/nb/ next to its own logs/pc/. The local file stays as a backup.
+    # The queue is capped (LOG_QUEUE_MAX lines), so a PC that is off for a
+    # week cannot fill the broker; the oldest lines go first.
+    WORKER_LOG_SHIP: bool = _env_bool("RAVYN_WORKER_LOG_SHIP", True)
+    QUEUE_LOG: str = _env("RAVYN_QUEUE_LOG", "ravyn.log")
+    LOG_QUEUE_MAX: int = _env_int("RAVYN_LOG_QUEUE_MAX", 20000)
+
     # --- LLM request config (sent with every call) ---
     LLM_TEMP: float = _env_float("RAVYN_LLM_TEMP", 0.7)
     LLM_MAX_TOKENS: int = _env_int("RAVYN_LLM_MAX_TOKENS", 200)
