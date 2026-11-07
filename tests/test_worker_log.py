@@ -294,6 +294,32 @@ def test_games_are_marked_and_readable_one_at_a_time():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def test_every_line_is_sent_to_the_pc():
+    print("\n--- every line also goes to the PC ---")
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        log = worker_log.WorkerLog(tmp)
+        sent = []
+        log.mark("game_start", champion="Riven")    # before the PC is wired
+        log.attach_sink(lambda name, line: sent.append((name, line)))
+        log.record(req_id="r1", source="chat", context={}, trigger="hi",
+                   mode="improv", skip_llm=False, said="hello")
+        local = log.path.read_text(encoding="utf-8").splitlines()
+        check("the PC gets exactly the local file, line for line",
+              [line for _, line in sent] == local,
+              f"{len(sent)} sent, {len(local)} local")
+        check("under the same file name",
+              {name for name, _ in sent} == {log.path.name})
+
+        def broken(name, line):
+            raise ConnectionError("broker gone")
+        log.attach_sink(broken)
+        log.record(req_id="r2", source="chat", context={}, trigger="x",
+                   mode="improv", skip_llm=False, said="y")
+        check("a dead link never stops the local file",
+              '"r2"' in log.path.read_text(encoding="utf-8"))
+
+
 def main() -> int:
     test_records_the_whole_request()
     test_direction_landing()
@@ -301,6 +327,7 @@ def main() -> int:
     test_never_raises()
     test_report_reads_it_back()
     test_games_are_marked_and_readable_one_at_a_time()
+    test_every_line_is_sent_to_the_pc()
 
     print()
     if FAILURES:

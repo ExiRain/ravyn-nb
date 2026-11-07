@@ -90,6 +90,11 @@ class MemoryManager:
         # Deliberately not persisted: it is scoped to the game being played,
         # and a restart is a new game.
         self.recent_game_lines: deque[str] = deque(maxlen=MAX_GAME_LINES)
+        # Who she has already said hello to this run. Not persisted, and not
+        # the history buffers either: those are evicted at MAX_TRACKED_USERS,
+        # and being evicted must not earn somebody a second hello. A run is a
+        # stream, so tomorrow everyone gets greeted again.
+        self.greeted: set[str] = set()
         self._load()
 
     # ---------------------------------------------------------
@@ -306,6 +311,19 @@ Write ONLY the summary, nothing else."""
         parts = [p for p in (self.get_user_notes(user), self.donor_line(user))
                  if p]
         return " ".join(parts)
+
+    # ---------------------------------------------------------
+    # greetings
+    # ---------------------------------------------------------
+
+    def needs_greeting(self, user: str) -> bool:
+        """True for somebody's first answered message this stream."""
+        return bool(user) and self._key(user) not in self.greeted
+
+    def mark_greeted(self, user: str) -> None:
+        """Called once she has actually answered them, not when asked to."""
+        if user:
+            self.greeted.add(self._key(user))
 
     def remember_name(self, key: str, name: str) -> None:
         if key and name:

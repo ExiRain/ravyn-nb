@@ -46,6 +46,11 @@ class WorkerLog:
         self._seq = 0
         self._started = time.time()
         self._system_prompt_written = False
+        # Where each line is also sent — the PC, over RabbitMQ. Lines written
+        # before it is attached (the start record) wait in the backlog.
+        self._sink = None
+        self._backlog: list[str] = []
+        self._sink_failed = False
 
         if not enabled:
             return
@@ -185,14 +190,41 @@ class WorkerLog:
                          "iso": _iso(), "chars": len(system),
                          "text": system})
 
+    def attach_sink(self, sink) -> None:
+        """
+        sink(file_name, json_line) is called for every line from now on, and
+        for the ones already written. Used to send the log to the PC.
+        """
+        self._sink = sink
+        backlog, self._backlog = self._backlog, []
+        for line in backlog:
+            self._ship(line)
+
+    def _ship(self, line: str) -> None:
+        if self._sink is None:
+            if len(self._backlog) < 500:
+                self._backlog.append(line)
+            return
+        try:
+            self._sink(self.path.name if self.path else "worker.jsonl", line)
+            self._sink_failed = False
+        except Exception as e:
+            # Said once per outage, not once per line. The local file still
+            # has it, so nothing is lost — the PC's copy just has a gap.
+            if not self._sink_failed:
+                print(f"[worker-log] Could not send to the PC: {e}")
+            self._sink_failed = True
+
     def _write(self, record: dict) -> None:
         if not self.path:
             return
+        line = json.dumps(record, ensure_ascii=False)
         try:
             with self.path.open("a", encoding="utf-8") as fh:
-                fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+                fh.write(line + "\n")
         except Exception as e:
             print(f"[worker-log] write failed: {e}")
+        self._ship(line)
 
 
 def new_request_id() -> str:

@@ -152,6 +152,43 @@ def test_viewer_notes_reach_the_prompt():
           "WHAT YOU KNOW ABOUT" not in bare[0]["content"])
 
 
+def test_a_first_message_tonight_is_greeted():
+    # 2026-11-06: momoelvie's first message was a question, and the answer had
+    # no hello in it. Nothing in the prompt said she was new.
+    print("\n--- a viewer's first message tonight ---")
+    ctx = {"user": "momoelvie", "lang": "ru"}
+    new = build_messages("как стримить на 3 зрителя?", "chat", ctx,
+                         history=[], greet=True)[-1]["content"]
+    check("a stranger is greeted by name", "Greet them by name" in new
+          and "momoelvie" in new, new)
+
+    regular = build_messages("hey", "chat", {"user": "alice"}, history=[],
+                             user_memory="Plays support.",
+                             greet=True)[-1]["content"]
+    check("a regular gets a hi, not a stranger's hello",
+          "said tonight" in regular and "ever spoken" not in regular, regular)
+
+    later = build_messages("hey", "chat", {"user": "alice"},
+                           history=[])[-1]["content"]
+    check("after that, no greeting", "Greet" not in later
+          and "Say hi" not in later, later)
+
+    owner = build_messages("gg", "chat",
+                           {"user": "ExiledRa1n", "is_owner": True},
+                           history=[], greet=True)[-1]["content"]
+    check("Exiled is not welcomed like a viewer", "Greet" not in owner
+          and "Say hi" not in owner, owner)
+
+    memory = MemoryManager.__new__(MemoryManager)
+    memory.greeted = set()
+    check("nobody is greeted before they speak",
+          memory.needs_greeting("Momoelvie"))
+    memory.mark_greeted("momoelvie")
+    check("once is enough, whatever the case of the name",
+          not memory.needs_greeting("MOMOELVIE"))
+    check("an unnamed message is never greeted", not memory.needs_greeting(""))
+
+
 def test_chat_does_not_tunnel_into_the_game():
     """
     From a live session: asked whether she was clever, and asked about her
@@ -237,6 +274,7 @@ def main():
     test_scaffolding_never_enters_memory()
     test_appearance()
     test_viewer_notes_reach_the_prompt()
+    test_a_first_message_tonight_is_greeted()
     test_chat_does_not_tunnel_into_the_game()
     test_a_stream_that_is_not_league()
 

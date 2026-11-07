@@ -44,6 +44,7 @@ GAME_INACTIVE = "No game is running. Just chatting."
 # to watch someone play League, not a coach.
 CHAT_MESSAGE = """A viewer named {user} says: "{message}"
 {user_notes}
+{greeting}
 {recent_chat_block}
 Respond naturally as Ravyn. If you don't know this person, be a little guarded. If they're a regular, you can be warmer.
 
@@ -54,6 +55,14 @@ CHAT_EXILED = """Exiled says: "{message}"
 This is your person. Respond naturally — loyal but mouthy.
 
 Answer what he actually asked about. If he is not talking about the game, do not drag it back there — not his deaths, not his teammates, not his last match. He is allowed to ask you about yourself, and you are allowed to just answer."""
+
+# Appended when this is the first thing a viewer has said to her tonight. On
+# 2026-11-06 a first-time chatter opened with a question and got an answer
+# with no hello at all — nothing in the prompt said they were new, so she had
+# no reason to. One short greeting, then the answer: the question still wins.
+GREET_NEW = """This is the first time {user} has ever spoken to you. Greet them by name first — one short hello, in your own guarded way, in the language you are answering in — then answer them."""
+
+GREET_REGULAR = """This is the first thing {user} has said tonight. Say hi to them by name first — briefly, you know them — then answer them."""
 
 RECENT_CHAT_BLOCK = """Other recent messages in chat:
 {lines}
