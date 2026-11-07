@@ -174,6 +174,25 @@ def _avoid_repeat(line: str, messages: list, context: dict, trigger: str,
     return "", retry, "repeat_dropped"
 
 
+def _note_donation(context: dict) -> None:
+    """
+    A donation leaves a note on whoever sent it, keyed the way her notes are
+    READ: user_key first (YouTube's "youtube:<channel id>"), else the login.
+    Keyed by display name, a YouTube donor's note was filed where she never
+    looks — and credited to any Twitch viewer of the same name.
+    """
+    donation = context.get("donation")
+    if not isinstance(donation, dict) or not context.get("user"):
+        return
+    try:
+        donor = context.get("user_key") or context["user"]
+        memory.remember_name(donor, context["user"])
+        memory.note_donation(donor, donation.get("amount", 0),
+                             donation.get("currency", "$"))
+    except Exception as e:
+        print(f"[{_ts()}][worker] Donation note failed: {e}")
+
+
 def _check_numbers(line: str, messages: list, context: dict, trigger: str,
                    source: str) -> tuple[str, dict | None, str]:
     """
@@ -293,14 +312,7 @@ def start_worker():
         # someone who has paid for something. Before the skip_llm branch,
         # because a donation IS a quote signal: the PC sanitises the message
         # and sends it straight to TTS, so nothing below would see it.
-        donation = context.get("donation")
-        if isinstance(donation, dict) and context.get("user"):
-            try:
-                memory.note_donation(context["user"],
-                                     donation.get("amount", 0),
-                                     donation.get("currency", "$"))
-            except Exception as e:
-                print(f"[{_ts()}][worker] Donation note failed: {e}")
+        _note_donation(context)
 
         req_id = context.get("req_id") or worker_log.new_request_id()
         started = time.time()
