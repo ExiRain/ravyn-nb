@@ -25,10 +25,13 @@ You never narrate any of this. Not your ears, not your tail, not your eyes, not 
 # STREAM STATE
 # =========================================================
 
+# Only what the PC actually sent. "Viewers: unknown" and "Stream mood:
+# neutral" sat in every prompt for months because nothing ever sent either,
+# and "No game is running. Just chatting." went out mid-game because nothing
+# sent game_active (fixed on the PC, 2026-11-07). A line is left out rather
+# than filled with a default she would treat as a fact.
 STREAM_STATE = """CURRENT STREAM STATE:
-Viewers: {viewer_count}
-Stream mood: {stream_mood}
-{game_line}"""
+{lines}"""
 
 GAME_ACTIVE = "Game: League of Legends is active."
 GAME_INACTIVE = "No game is running. Just chatting."

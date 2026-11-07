@@ -104,14 +104,16 @@ def build_messages(
         system_parts.append("LANGUAGE: Respond in the same language the user writes in.")
 
 
-    viewer_count = context.get("viewer_count", "unknown")
-    stream_mood = context.get("stream_mood", "neutral")
-    game_active = context.get("game_active", False)
-    game_line = GAME_ACTIVE if game_active else GAME_INACTIVE
-
-    system_parts.append(STREAM_STATE.format(
-        viewer_count=viewer_count, stream_mood=stream_mood, game_line=game_line,
-    ))
+    # Each line only when the PC sent its value — see STREAM_STATE.
+    state = []
+    if context.get("viewer_count") is not None:
+        state.append(f"Viewers: {context['viewer_count']}")
+    if context.get("stream_mood"):
+        state.append(f"Stream mood: {context['stream_mood']}")
+    if "game_active" in context:
+        state.append(GAME_ACTIVE if context["game_active"] else GAME_INACTIVE)
+    if state:
+        system_parts.append(STREAM_STATE.format(lines="\n".join(state)))
 
     if general_memory:
         system_parts.append(GENERAL_MEMORY.format(summary=general_memory))
@@ -251,10 +253,9 @@ def _frame_signal(text: str, source: str, context: dict, user_memory: str,
         MILESTONE_EVENTS = {"GameStart", "GameEnd"}
         ROAST_EVENTS = {"TeamfightMissed"}
 
-        # deaths — routed by death count, short_mode for interrupts
+        # deaths — routed by death count
         if event_type == "MyDeath":
             death_count = context.get("death_count", 1)
-            short = context.get("short_mode", False)
 
             # The fixed "death #5 onward is always a roast" escalation is
             # gone. It is what made her repeat herself: a maximum-heat
@@ -268,9 +269,6 @@ def _frame_signal(text: str, source: str, context: dict, user_memory: str,
                     event=text, death_count=death_count))
             else:
                 built = framed(GAME_EVENT_DEATH.format(event=text))
-
-            if short:
-                built += "\nIMPORTANT: Exiled is currently talking. Keep this to ONE short punchy sentence. Maximum 6 words."
 
             return built
 

@@ -269,6 +269,30 @@ def test_a_stream_that_is_not_league():
           "LEAGUE OF LEGENDS:" in older)
 
 
+def test_stream_state_says_only_what_it_was_told():
+    # 2026-11-07: every prompt said "No game is running. Just chatting." —
+    # mid-game included — because the PC never sent game_active, and
+    # "Viewers: unknown" / "Stream mood: neutral" because nothing sent those.
+    print("\n--- the stream state line ---")
+    in_game = build_messages("You died.", "game", dict(GAME_CONTEXT,
+                             game_active=True), history=[])[0]["content"]
+    check("in a game she is told a game is on",
+          "League of Legends is active" in in_game
+          and "No game is running" not in in_game)
+
+    between = build_messages("hi", "chat", {"user": "bob",
+                             "game_active": False}, history=[])[0]["content"]
+    check("between games, that there is none",
+          "No game is running" in between)
+
+    older = build_messages("hi", "chat", {"user": "bob"},
+                           history=[])[0]["content"]
+    check("a PC that sends nothing gets no claim either way",
+          "No game is running" not in older and "is active" not in older)
+    check("no invented viewer count or mood",
+          "Viewers: unknown" not in older and "Stream mood" not in older)
+
+
 def main():
     test_scaffolding_reaches_the_prompt()
     test_scaffolding_never_enters_memory()
@@ -277,6 +301,7 @@ def main():
     test_a_first_message_tonight_is_greeted()
     test_chat_does_not_tunnel_into_the_game()
     test_a_stream_that_is_not_league()
+    test_stream_state_says_only_what_it_was_told()
 
     print()
     if FAILURES:
