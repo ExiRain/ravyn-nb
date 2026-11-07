@@ -6,7 +6,7 @@ import pika
 from app.settings import get_settings
 from app import worker_log
 from adapters.llm.llama_server_client import run_llm, run_llm_simple
-from persona import filters
+from persona import filters, numbers
 from persona.context_builder import build_messages
 from persona.memory import MemoryManager
 from persona.repeats import RepeatGuard
@@ -174,6 +174,49 @@ def _avoid_repeat(line: str, messages: list, context: dict, trigger: str,
     return "", retry, "repeat_dropped"
 
 
+def _check_numbers(line: str, messages: list, context: dict, trigger: str,
+                   source: str) -> tuple[str, dict | None, str]:
+    """
+    (line to speak, the retry's LLM response or None, what happened or "").
+
+    A number in a game line that is in nothing she was given is invented —
+    see persona/numbers.py. One retry, told which number; if the retry
+    invents too, the sentences carrying invented numbers are cut.
+    """
+    # The game prompt only: the situation, the event, his notes and the
+    # angle are all in it. Not the system prompt, whose own numbers (rules,
+    # her persona) would excuse ones she invented.
+    given = str((messages[-1] if messages else {}).get("content") or "") + \
+        " " + (trigger or "")
+    bad = numbers.unsupported(line, given)
+    if not bad:
+        return line, None, ""
+
+    print(f"[{_ts()}][worker] Invented number(s) {bad} — asking once more")
+    note = (f"\n\nYou were about to say {', '.join(bad)}, which is not in "
+            f"the situation above. Only use numbers exactly as they are "
+            f"written there, about the same person or team they belong to. "
+            f"If you are not sure, use no number at all.")
+    retry_messages = [dict(m) for m in messages]
+    retry_messages[-1]["content"] = retry_messages[-1]["content"] + note
+
+    retry = run_llm(retry_messages, thinking=settings.LLM_THINKING)
+    candidate, _ = _finish(retry.get("text", ""), source)
+    if candidate and not numbers.unsupported(candidate, given):
+        print(f"[{_ts()}][worker] Numbers fixed on retry: {candidate[:80]}")
+        return candidate, retry, "numbers_retried"
+
+    trimmed = numbers.without_sentences_naming(candidate or line, given)
+    if not trimmed and (context.get("must_land")
+                        or context.get("event_type") in MUST_LAND):
+        # Better a line with a wrong number than a game with no ending.
+        print(f"[{_ts()}][worker] Numbers still off, kept — must land")
+        return candidate or line, retry, "numbers_kept"
+    print(f"[{_ts()}][worker] Cut the sentence(s) with invented numbers: "
+          f"{trimmed[:80] or '(nothing left)'}")
+    return trimmed, retry, "numbers_cut"
+
+
 def start_worker():
     """
     LLM worker. Consumes ravyn.request, produces ravyn.response.
@@ -315,6 +358,17 @@ def start_worker():
                 # not stop an 18.8% echo rate. See persona/repeats.py.
                 if spoken_text and source in REPEAT_GUARDED:
                     spoken_text, retry, how = _avoid_repeat(
+                        spoken_text, messages, context, text, source)
+                    if how:
+                        removed.append(how)
+                    if retry:
+                        response = retry
+                        mood = retry.get("mood") if retry.get("mood") is not None else mood
+                        tired = retry.get("tired") if retry.get("tired") is not None else tired
+                # Game lines only: chat answers a person, and a viewer's
+                # "what is 7 times 8" is not a game stat to verify.
+                if spoken_text and source == "game":
+                    spoken_text, retry, how = _check_numbers(
                         spoken_text, messages, context, text, source)
                     if how:
                         removed.append(how)
