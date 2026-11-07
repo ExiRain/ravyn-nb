@@ -34,3 +34,6 @@ data/memory.json
 # includes viewer notes and chat history by name, so they stay local; read
 # them with tools/worker_report.py.
 logs/
+
+# graphify knowledge graph — rebuilt on demand with /graphify, not source
+graphify-out/
