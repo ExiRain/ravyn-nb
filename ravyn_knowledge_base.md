@@ -3,6 +3,30 @@
 
 ---
 
+> **Current state (2026-11) — read this first.** This document is the
+> decision history, and parts of it describe a setup that no longer exists.
+> Where it disagrees with the code or a STATUS.md, the code wins.
+>
+> - **Voice moved to the PC.** The notebook is LLM-only (`ravyn-nb`).
+>   Text-to-speech runs on the PC's RTX 5080 (`ravyn-lynx-p/services/tts_engine.py`):
+>   **Qwen3-TTS** (`Qwen/Qwen3-TTS-12Hz-1.7B-Base`) cloning `ravyn_voice_ref.wav`,
+>   English and Russian, with **Chatterbox Turbo** (English only) as the
+>   fallback. Kokoro, the +3-semitone pyrubberband shift and `api.py` (§2, §4
+>   "Why Kokoro", "Why pyrubberband", the `api.py` tag stripping in §6, §9
+>   Voice Configuration, and the audio rows in §10) describe the old notebook
+>   pipeline.
+> - **Orchestration is built** (§7 says "Planned"): the PC's dispatcher, signal
+>   sources and priority queue in `ravyn-lynx-p/orchestrator/` and `sources/`.
+> - **Hearing is built.** Faster-Whisper runs on the PC, fed by the voice gate
+>   (`sources/voice_in.py`) — "planned" in §4 is out of date.
+> - **The machines talk over three RabbitMQ queues:** `ravyn.request` (PC →
+>   notebook), `ravyn.response` (notebook → PC) and `ravyn.log` (the notebook's
+>   worker log, mirrored to the PC's `logs/nb/`).
+> - **Where the truth lives now:** each repo's `STATUS.md`, and the combined
+>   graph in `ravyn-lynx-p/graph/`.
+
+---
+
 ## 1. Project Vision
 
 Ravyn is a Live2D animated AI stream companion for Twitch, designed to feel alive and emotionally expressive. She is not a simple chatbot — she has a personality, reacts autonomously to stream events, engages with chat, comments on League of Legends gameplay, and has her own idle behaviors that make her feel present even when nobody is talking to her.
