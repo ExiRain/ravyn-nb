@@ -293,6 +293,23 @@ def test_stream_state_says_only_what_it_was_told():
           "Viewers: unknown" not in older and "Stream mood" not in older)
 
 
+def test_a_likely_scam_is_not_welcomed():
+    # 2026-11-09: "let's connect on discord" got a welcome and four warm
+    # replies. The PC now flags it; the prompt must warn, not greet.
+    print("\n--- a chatter the PC flags as a likely scam ---")
+    prompt = build_messages("Let's connect on discord", "chat",
+                            {"user": "determined811", "scam_suspect": True,
+                             "scam_reasons": ["moves you to a private app",
+                                              "wants to 'connect' or collab"]},
+                            history=[], greet=True)[-1]["content"]
+    check("she is warned, with the reasons", "looks like the scam" in prompt
+          and "private app" in prompt, prompt[-300:])
+    check("and not welcomed as a new viewer",
+          "Greet them by name" not in prompt and "Say hi" not in prompt)
+    check("and told never to repeat a handle or link",
+          "never repeat a handle" in prompt)
+
+
 def main():
     test_scaffolding_reaches_the_prompt()
     test_scaffolding_never_enters_memory()
@@ -302,6 +319,7 @@ def main():
     test_chat_does_not_tunnel_into_the_game()
     test_a_stream_that_is_not_league()
     test_stream_state_says_only_what_it_was_told()
+    test_a_likely_scam_is_not_welcomed()
 
     print()
     if FAILURES:

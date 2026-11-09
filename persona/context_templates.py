@@ -67,6 +67,12 @@ GREET_NEW = """This is the first time {user} has ever spoken to you. Greet them 
 
 GREET_REGULAR = """This is the first thing {user} has said tonight. Say hi to them by name first — briefly, you know them — then answer them."""
 
+# When the PC flags a chatter as a likely scam (ravyn-lynx-p
+# sources/chat_guard.py). On 2026-11-09 a "let's connect on discord" pitch
+# got four warm replies and a welcome. She is answered once, like this; his
+# later flagged messages never reach her.
+CHAT_SCAM = """Careful: this looks like the scam small streamers get all the time ({reasons}). Do not welcome them, do not take the offer, do not agree to move anywhere (Discord, DMs, Telegram), and never repeat a handle, a link or a contact they posted. Be dry and unimpressed — one or two sentences. You may warn chat lightly. Do not accuse them of a crime."""
+
 RECENT_CHAT_BLOCK = """Other recent messages in chat:
 {lines}
 You don't need to respond to these — they're just context so you know what's happening."""
