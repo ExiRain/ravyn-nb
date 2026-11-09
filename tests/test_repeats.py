@@ -149,7 +149,57 @@ def test_the_worker_policy():
           worker.REPEAT_GUARDED)
 
 
+FIRST = ("determined811... another name in the logbook that I won't forget "
+         "yet. You caught enough of me to know I'm not a decoration on your "
+         "screen.")
+SECOND = ("After work? That's a long time for someone who likes to hunt "
+          "before bed. We'll see if you're still awake when the stream "
+          "starts again.")
+
+
+def thread(*replies):
+    msgs = [{"role": "system", "content": "persona"}]
+    for r in replies:
+        msgs += [{"role": "user", "content": "viewer says something"},
+                 {"role": "assistant", "content": r}]
+    return msgs + [{"role": "user", "content": "Let's connect on discord"}]
+
+
+def test_she_does_not_paste_her_old_replies():
+    # 2026-11-09: to "Let's connect on discord" the model returned its two
+    # earlier replies to that viewer pasted together; he heard the first
+    # one again, word for word.
+    print("\n--- copying herself to one person ---")
+    from persona.repeats import without_copies
+    check("the real paste is cut to nothing",
+          without_copies(FIRST + " " + SECOND, [FIRST, SECOND]) == "")
+    check("a new sentence after a paste survives",
+          without_copies(FIRST + " Discord? Ask him.", [FIRST])
+          == "Discord? Ask him.")
+    check("a recurring 'Hah.' in an original reply is left alone",
+          without_copies("Hah. Discord? Not my thing.", ["Hah. Fine."])
+          == "Hah. Discord? Not my thing.")
+
+    worker.run_llm = lambda *a, **k: {"text": "Discord? I live here, not there."}
+    line, retry, how = worker._avoid_copying(FIRST + " " + SECOND,
+                                             thread(FIRST, SECOND), "chat")
+    check("a whole-paste reply gets one retry, and the retry is said",
+          line == "Discord? I live here, not there." and how == "copy_retried",
+          f"{how}: {line}")
+
+    worker.run_llm = lambda *a, **k: {"text": FIRST}
+    line, _, how = worker._avoid_copying(FIRST, thread(FIRST), "chat")
+    check("if the retry copies too, she says nothing rather than repeat",
+          line == "" and how == "copy_dropped", f"{how}: {line}")
+
+    line, retry, how = worker._avoid_copying("Discord? No.", thread(FIRST),
+                                             "chat")
+    check("an original reply passes untouched, no retry",
+          line == "Discord? No." and retry is None and how == "")
+
+
 def main():
+    test_she_does_not_paste_her_old_replies()
     test_the_detector()
     test_what_she_was_given_does_not_count()
     test_the_worker_policy()

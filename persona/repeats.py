@@ -122,3 +122,46 @@ class RepeatGuard:
 
     def __len__(self) -> int:
         return len(self._lines)
+
+
+# ---------------------------------------------------------------------
+# copying herself to one person
+# ---------------------------------------------------------------------
+
+# Shorter than this and a sentence is a stock phrase ("Hah.", "Fine."), not a
+# copy worth cutting.
+MIN_COPIED_WORDS = 5
+
+_SENTENCE = re.compile(r"[^.!?…]+(?:[.!?…]+|$)")
+
+
+def _norm(text: str) -> str:
+    return " ".join(words(text))
+
+
+def without_copies(line: str, earlier: list[str]) -> str:
+    """
+    Her line minus every sentence she already said, word for word, to this
+    same person.
+
+    Chat history is replayed per person, and on 2026-11-09 the model pasted
+    its two previous replies to a viewer back as its answer to his third
+    message; the length filter kept the first, so he heard the exact line
+    she had said a minute before. The tonight-wide RepeatGuard does not run
+    on chat (a viewer who asks twice is owed an answer twice), so this checks
+    only her own earlier replies in this person's thread.
+    """
+    said = [_norm(e) for e in earlier if e]
+    sentences = [x for x in _SENTENCE.findall(line or "") if x.strip()]
+    copied = [bool(_norm(x)) and any(_norm(x) in s for s in said)
+              for x in sentences]
+    # One long copied sentence makes the line a paste; then the short
+    # fragments pasted with it ("determined811...", "After work?") go too.
+    # Without one, a stock "Hah." that happens to recur is left alone.
+    pasted = any(c and len(_norm(x).split()) >= MIN_COPIED_WORDS
+                 for x, c in zip(sentences, copied))
+    if not pasted:
+        return (line or "").strip()
+    return " ".join(x.strip() for x, c in zip(sentences, copied)
+                    if not c).strip()
+

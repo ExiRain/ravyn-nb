@@ -9,7 +9,7 @@ from adapters.llm.llama_server_client import run_llm, run_llm_simple
 from persona import filters, numbers
 from persona.context_builder import build_messages
 from persona.memory import MemoryManager
-from persona.repeats import RepeatGuard
+from persona.repeats import RepeatGuard, without_copies
 
 settings = get_settings()
 memory = MemoryManager()
@@ -191,6 +191,39 @@ def _note_donation(context: dict) -> None:
                              donation.get("currency", "$"))
     except Exception as e:
         print(f"[{_ts()}][worker] Donation note failed: {e}")
+
+
+def _avoid_copying(line: str, messages: list, source: str
+                   ) -> tuple[str, dict | None, str]:
+    """
+    (line, the retry's LLM response or None, what happened or "").
+
+    Chat and voice: cut what she already said word for word to this same
+    person (persona/repeats.py, without_copies). If nothing new is left, one
+    retry told to answer the new message; if that copies too, its new part
+    is all she says, and a person who spoke to her gets nothing rather than
+    the same line twice.
+    """
+    earlier = [m.get("content", "") for m in messages[1:-1]
+               if m.get("role") == "assistant"]
+    if not earlier:
+        return line, None, ""
+    trimmed = without_copies(line, earlier)
+    if trimmed == line.strip():
+        return line, None, ""
+    if trimmed:
+        print(f"[{_ts()}][worker] Cut a copy of an earlier reply: {trimmed[:80]}")
+        return trimmed, None, "copy_cut"
+
+    print(f"[{_ts()}][worker] Whole reply was an earlier one — asking once more")
+    note = ("\n\nYou were about to repeat what you already said to them, word "
+            "for word. Answer this new message instead, in new words.")
+    retry_messages = [dict(m) for m in messages]
+    retry_messages[-1]["content"] = retry_messages[-1]["content"] + note
+    retry = run_llm(retry_messages, thinking=settings.LLM_THINKING)
+    candidate, _ = _finish(retry.get("text", ""), source)
+    candidate = without_copies(candidate, earlier)
+    return candidate, retry, "copy_retried" if candidate else "copy_dropped"
 
 
 def _check_numbers(line: str, messages: list, context: dict, trigger: str,
@@ -401,6 +434,15 @@ def start_worker():
                 if spoken_text and source == "game":
                     spoken_text, retry, how = _check_numbers(
                         spoken_text, messages, context, text, source)
+                    if how:
+                        removed.append(how)
+                    if retry:
+                        response = retry
+                        mood = retry.get("mood") if retry.get("mood") is not None else mood
+                        tired = retry.get("tired") if retry.get("tired") is not None else tired
+                if spoken_text and source in ("chat", "voice"):
+                    spoken_text, retry, how = _avoid_copying(
+                        spoken_text, messages, source)
                     if how:
                         removed.append(how)
                     if retry:
