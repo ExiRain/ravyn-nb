@@ -129,13 +129,29 @@ def test_the_worker_policy():
                                         "Game started.", "game")
     check("but a game start is never left silent",
           line and how == "repeat_kept", f"{line!r} {how}")
+    check("and what it says is the seed, not the repeat",
+          line == "Game started.", repr(line))
 
     line, _, how = worker._avoid_repeat(repeat, messages,
                                         {"event_type": "DragonKill",
                                          "must_land": True},
                                         "They took soul.", "game")
     check("nor anything the PC flags must_land — soul, Baron",
-          line and how == "repeat_kept", f"{line!r} {how}")
+          line == "They took soul." and how == "repeat_kept",
+          f"{line!r} {how}")
+
+    line, _, how = worker._avoid_repeat(
+        repeat, messages, {"event_type": "BaronKill", "must_land": True},
+        "Exiled's teammate Sylas took Baron. Did you just steal that?", "game")
+    check("the seed is said in her voice, without the lead-in written to her",
+          line == "Sylas took Baron. Did you just steal that?", repr(line))
+
+    line, _, how = worker._avoid_repeat(
+        repeat, messages,
+        {"event_type": "BaronKill", "must_land": True, "lang": "ru"},
+        "The enemy Elise took Baron.", "game")
+    check("a Russian game keeps the retry rather than an English seed",
+          line == repeat and how == "repeat_kept", f"{line!r} {how}")
 
     sent.clear()
     line, retry, how = worker._avoid_repeat(
