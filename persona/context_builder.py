@@ -189,7 +189,11 @@ def _frame_signal(text: str, source: str, context: dict, user_memory: str,
         # Her first answer to them tonight says hello. Owner excluded above:
         # he is not a viewer arriving, and is framed as her person instead.
         greeting = ""
-        if greet and user:
+        if context.get("scam_suspect"):
+            # No welcome for a likely scam: the warning takes its place.
+            reasons = ", ".join(context.get("scam_reasons") or []) or "a pitch"
+            greeting = CHAT_SCAM.format(reasons=reasons)
+        elif greet and user:
             greeting = (GREET_REGULAR if user_memory else GREET_NEW).format(user=user)
         return CHAT_MESSAGE.format(
             user=who, message=text, user_notes=user_notes,
