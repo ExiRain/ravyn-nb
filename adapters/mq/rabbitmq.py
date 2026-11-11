@@ -136,13 +136,34 @@ MUST_LAND = {"GameStart", "GameEnd"}
 REPEATS = RepeatGuard()
 
 
+_SEED_PREFIX = "Exiled's teammate "
+
+
+def _seed_line(trigger: str, context: dict) -> str:
+    """
+    The event's trigger as something she can say herself, or "".
+
+    The PC writes it as "<what happened>. <a quote from her own pool>", in
+    English. "Exiled's teammate Sylas took Baron." is addressed to her, so the
+    lead-in goes; a non-English game gets nothing, since the seed would be the
+    wrong language.
+    """
+    if (context.get("lang") or "en") != "en":
+        return ""
+    seed = (trigger or "").strip()
+    if seed.startswith(_SEED_PREFIX):
+        seed = seed[len(_SEED_PREFIX):]
+    return seed
+
+
 def _avoid_repeat(line: str, messages: list, context: dict, trigger: str,
                   source: str) -> tuple[str, dict | None, str]:
     """
     (line to speak, the retry's LLM response or None, what happened or "").
 
     One retry, told exactly what it repeated. If that repeats too the line is
-    dropped — unless it is one of MUST_LAND, which keeps the retry.
+    dropped — unless it is one of MUST_LAND, which says the event's own seed
+    text instead of the repeat.
     """
     given = " ".join([trigger or ""] + [
         str(context.get(k) or "") for k in ("player_notes", "situation",
@@ -167,9 +188,13 @@ def _avoid_repeat(line: str, messages: list, context: dict, trigger: str,
     # Or flagged by the PC: soul and Baron. On 2026-10-30 "they just took
     # soul" was dropped as a repeat.
     if context.get("must_land") or context.get("event_type") in MUST_LAND:
-        print(f"[{_ts()}][worker] Still a repeat, kept — "
-              f"{context.get('event_type')} must land")
-        return candidate or line, retry, "repeat_kept"
+        # The seed, not the repeat: on 2026-11-10 a Baron was answered with
+        # an earlier line about a kill on Caitlyn, word for word, because
+        # the retry had copied it too and this kept it.
+        spoken = _seed_line(trigger, context) or candidate or line
+        print(f"[{_ts()}][worker] Still a repeat — "
+              f"{context.get('event_type')} must land, saying the seed")
+        return spoken, retry, "repeat_kept"
     print(f"[{_ts()}][worker] Still a repeat — saying nothing")
     return "", retry, "repeat_dropped"
 
