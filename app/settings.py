@@ -77,6 +77,11 @@ class Settings:
     QUEUE_LOG: str = _env("RAVYN_QUEUE_LOG", "ravyn.log")
     LOG_QUEUE_MAX: int = _env_int("RAVYN_LOG_QUEUE_MAX", 20000)
 
+    # The most words one game line may run to; longer ones lose whole
+    # sentences from the end (persona/filters.py, shorten). Raise it once her
+    # lines are worth more words. 0 switches the limit off.
+    GAME_MAX_WORDS: int = _env_int("RAVYN_GAME_MAX_WORDS", 28)
+
     # --- LLM request config (sent with every call) ---
     LLM_TEMP: float = _env_float("RAVYN_LLM_TEMP", 0.7)
     LLM_MAX_TOKENS: int = _env_int("RAVYN_LLM_MAX_TOKENS", 200)
