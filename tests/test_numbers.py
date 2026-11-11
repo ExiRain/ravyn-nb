@@ -67,3 +67,10 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+def test_compound_with_one_reads_whole():
+    assert [v for v, _ in numbers.numbers_in("twenty-one kills")] == [21]
+    assert [v for v, _ in numbers.numbers_in("thirty one")] == [31]
+    assert numbers.unsupported("twenty-one kills", "Kills: 21") == []
+    assert numbers.unsupported("one of them", "") == []

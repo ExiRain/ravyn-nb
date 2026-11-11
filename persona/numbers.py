@@ -35,7 +35,7 @@ _TENS = {"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60,
 # one of you" are idiom, not a count. One and two as digits are still checked.
 _WORD = re.compile(
     r"\b(?:(" + "|".join(_TENS) + r")(?:[\s-](" + "|".join(
-        k for k in _UNITS if 0 < _UNITS[k] < 10) + r"))?|("
+        ["one"] + [k for k in _UNITS if 0 < _UNITS[k] < 10]) + r"))?|("
     + "|".join(_UNITS) + r"))\b", re.IGNORECASE)
 _DIGITS = re.compile(r"\d+")
 
@@ -53,7 +53,9 @@ def numbers_in(text: str) -> list[tuple[int, str]]:
         if m.group(1):
             value = _TENS[m.group(1).lower()]
             if m.group(2):
-                value += _UNITS[m.group(2).lower()]
+                # "one" is only in _UNITS' place here, as the tail of a
+                # compound — "twenty-one" is 21, never 20.
+                value += _UNITS.get(m.group(2).lower(), 1)
         else:
             value = _UNITS[m.group(3).lower()]
         found.append((value, m.group(0)))
