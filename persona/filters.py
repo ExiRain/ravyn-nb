@@ -61,6 +61,9 @@ _DIALOGUE_TAG = re.compile(
 _ASTERISKS = re.compile(r"\*[^*]+\*")
 _BRACKETED = re.compile(r"[\[(][^\])]{1,60}[\])]")
 
+# Numbers in brackets — a KDA, a score — are content, not direction.
+_SCORE = re.compile(r"[\[(]\s*(\d+(?:\s*[/:\-]\s*\d+)*)\s*[\])]")
+
 # Mood tags are structural and parsed elsewhere; they must survive this.
 _MOOD_TAG = re.compile(r"\[(?:mood|tired):[^\]]*\]", re.IGNORECASE)
 
@@ -167,6 +170,11 @@ def clean(text: str, tally: Tally | None = None) -> Result:
     # the bracket rule eat them.
     tags = _MOOD_TAG.findall(text)
     text = _MOOD_TAG.sub(" ", text)
+
+    # A score in brackets is something she says, not a stage direction:
+    # "[10/5/0] is exactly what I expected" lost its subject on 2026-11-12
+    # and was spoken as "is exactly what I expected". Unwrap it instead.
+    text = _SCORE.sub(lambda m: m.group(1), text)
 
     text, hit = _strip(text, _ASTERISKS, _BRACKETED)
     if hit:
