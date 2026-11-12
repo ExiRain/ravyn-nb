@@ -215,6 +215,46 @@ def clean(text: str, tally: Tally | None = None) -> Result:
     return Result(text + ("" if not tags else " " + " ".join(tags)), removed)
 
 
+_CLAUSE_END = re.compile(r"[,;:—–]$")
+
+
+def shorten(text: str, max_words: int) -> str:
+    """
+    Her line, held to max_words by dropping whole sentences from the end.
+
+    "One or two sentences max" was asked for in every game prompt and on
+    2026-11-11 her game lines still averaged 35 words: two run-on sentences
+    joined with "..." and commas. Sentences are kept whole while they fit —
+    her "..." counts as a break, it is where she pauses. A first sentence
+    that is too long on its own is cut at its last comma inside the limit,
+    so she stops at a breath rather than mid-phrase.
+    """
+    text = (text or "").strip()
+    if max_words <= 0 or len(text.split()) <= max_words:
+        return text
+    tags = " ".join(re.findall(r"\[[a-z]+:[^\]]*\]", text))
+    body = re.sub(r"\s*\[[a-z]+:[^\]]*\]", "", text).strip()
+    if len(body.split()) <= max_words:
+        return text
+
+    kept, count = [], 0
+    for part in re.split(r"(?<=[.!?…])\s+", body):
+        n = len(part.split())
+        if kept and count + n > max_words:
+            break
+        kept.append(part)
+        count += n
+    out = " ".join(kept)
+
+    if count > max_words:                   # the first sentence alone
+        cut = out.split()[:max_words]
+        ends = [i for i, w in enumerate(cut) if _CLAUSE_END.search(w)]
+        if ends and ends[-1] >= max_words // 2:
+            cut = cut[:ends[-1] + 1]
+        out = " ".join(cut).rstrip(",;:—–- ") + "."
+    return (out + " " + tags).strip()
+
+
 def _strip(text: str, *patterns) -> tuple[str, bool]:
     hit = False
     for pattern in patterns:

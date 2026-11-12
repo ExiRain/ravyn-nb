@@ -69,6 +69,29 @@ def test_the_detector():
     check("the same line with a word changed is caught", bool(g.echo(near)))
 
 
+def test_short_phrases():
+    print("\n--- catchphrases and habits (2026-11-11) ---")
+    g = RepeatGuard()
+    g.add("Kayn is dead again while the rest of you were busy watching "
+          "paint dry.")
+    check("a three-word catchphrase is a repeat the second time",
+          "watching paint dry" in g.echo(
+              "Lux landed it while her team sat watching paint dry."))
+    check("ordinary English is not a catchphrase",
+          g.echo("The rest of them are still alive, somehow.") == "")
+
+    g = RepeatGuard()
+    g.add("Honestly, I'm just glad you found your footing this early.")
+    check("a turn of phrase may come round once",
+          g.echo("Honestly, I'm just glad that quiet did not last.") == "")
+    g.add("Honestly, I'm just glad that quiet did not last.")
+    check("the third time it is a habit",
+          "just glad" in g.echo("Honestly, I'm just glad he carried."))
+    check("unless it is what she was given",
+          g.echo("Honestly, I'm just glad he carried.",
+                 given="honestly i'm just glad") == "")
+
+
 def test_what_she_was_given_does_not_count():
     print("\n--- saying back what he told her is not a repeat ---")
     notes = "I'm genuinely tryharding on her right now, Ashe is my pick"
@@ -217,6 +240,7 @@ def test_she_does_not_paste_her_old_replies():
 def main():
     test_she_does_not_paste_her_old_replies()
     test_the_detector()
+    test_short_phrases()
     test_what_she_was_given_does_not_count()
     test_the_worker_policy()
 

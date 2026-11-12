@@ -22,7 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from persona.filters import MAX_SENTENCES, Tally, clean   # noqa: E402
+from persona.filters import MAX_SENTENCES, Tally, clean, shorten   # noqa: E402
 
 FAILURES: list[str] = []
 
@@ -126,6 +126,31 @@ def test_length_cap():
           clean("Hah. Rough.").text == "Hah. Rough.")
 
 
+def test_game_lines_are_held_short():
+    print("\n--- a game line is not a life story ---")
+    long = ("Kayn got himself a Rift Herald, which is fine... assuming "
+            "someone actually remembers that heralds are only worth the "
+            "tower they take. Do not tell me we are going to just stand "
+            "here and let him waste it on nothing at all again.")
+    short = shorten(long, 28)
+    check("whole sentences are dropped from the end",
+          short == "Kayn got himself a Rift Herald, which is fine... "
+                   "assuming someone actually remembers that heralds are "
+                   "only worth the tower they take.", short)
+    one = ("You keep walking right into their traps like they have not "
+           "changed their strategy at all, and you get nothing for it, and "
+           "it is the same pattern every single time you decide to dive in "
+           "when staying put was right there")
+    cut = shorten(one, 28)
+    check("one endless sentence stops at a comma",
+          len(cut.split()) <= 28 and cut.endswith("for it."), cut)
+    check("a short line is left alone",
+          shorten("Clean win.", 28) == "Clean win.")
+    check("mood tags are kept and not counted",
+          shorten(long + " [mood:0.4]", 28).endswith("[mood:0.4]"))
+    check("0 switches it off", shorten(long, 0) == long)
+
+
 def test_mood_tags_survive():
     print("\n--- mood tags are structure, not speech ---")
     out = clean("Hah. That is rough. [mood:0.3] [tired:0.1]").text
@@ -184,6 +209,7 @@ def main():
     test_instruction_leak()
     test_emoji_and_quotes()
     test_length_cap()
+    test_game_lines_are_held_short()
     test_mood_tags_survive()
     test_tally_is_the_measurement()
     test_never_raises()

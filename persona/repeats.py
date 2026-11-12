@@ -37,6 +37,21 @@ OPENING_WORDS = 5
 OPENING_SCORE = 0.75
 MAX_LINES = 300          # a long stream; the oldest fall off
 
+# Shorter than a 5-word run, and what a listener actually hears. On
+# 2026-11-11 every spoken line passed the rules above while "watching paint
+# dry" was said four times in one game and "honestly, I'm just glad" seven
+# times in the next.
+#   A catchphrase: three words in a row, none of them filler or given. Once
+#   is hers; the second time is a tic.
+#   A habit: a 4-word run with two words of her own, already in
+#   HABIT_USES of her last HABIT_WINDOW lines. Two uses are how people
+#   talk; the third is the one that grates.
+CATCH_WORDS = 3
+HABIT_WORDS = 4
+HABIT_OWN_WORDS = 2
+HABIT_USES = 2
+HABIT_WINDOW = 40
+
 STOPWORDS = {
     "the", "a", "an", "and", "or", "but", "if", "of", "to", "in", "on", "at",
     "for", "with", "is", "are", "was", "were", "be", "been", "it", "its",
@@ -67,6 +82,17 @@ def _grams(toks: list[str], given: set[str] = frozenset()) -> set[tuple]:
         gram = tuple(toks[i:i + PHRASE_WORDS])
         own = sum(1 for w in gram if w not in FILLER and w not in given)
         if own >= PHRASE_OWN_WORDS:
+            out.add(gram)
+    return out
+
+
+def _runs(toks: list[str], size: int, own_needed: int,
+          given: set[str] = frozenset()) -> set[tuple]:
+    out = set()
+    for i in range(len(toks) - size + 1):
+        gram = tuple(toks[i:i + size])
+        if sum(1 for w in gram
+               if w not in FILLER and w not in given) >= own_needed:
             out.add(gram)
     return out
 
@@ -113,6 +139,25 @@ class RepeatGuard:
             b = [w for w in old_toks if w not in given_words] or old_toks
             if similarity(a, b) >= SIMILARITY:
                 return f'your earlier line "{old_text[:90]}"'
+
+        recent = list(self._lines)[-HABIT_WINDOW:]
+
+        catch = _runs(toks, CATCH_WORDS, CATCH_WORDS, given_words)
+        for old_toks, _ in reversed(recent):
+            shared = catch & _runs(old_toks, CATCH_WORDS, CATCH_WORDS)
+            if shared:
+                return f'the phrase "{" ".join(sorted(shared)[0])}"'
+
+        habit = _runs(toks, HABIT_WORDS, HABIT_OWN_WORDS, given_words)
+        if habit:
+            uses: dict = {}
+            for old_toks, _ in recent:
+                for gram in habit & _runs(old_toks, HABIT_WORDS,
+                                          HABIT_OWN_WORDS):
+                    uses[gram] = uses.get(gram, 0) + 1
+            worn = sorted(g for g, n in uses.items() if n >= HABIT_USES)
+            if worn:
+                return f'the phrase "{" ".join(worn[0])}"'
         return ""
 
     def add(self, text: str) -> None:

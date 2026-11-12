@@ -443,6 +443,17 @@ def start_worker():
 
                 spoken_text, removed = _finish(spoken_text, source)
 
+                # Before the repeat check, so a phrase that is cut anyway
+                # does not cost her the whole line.
+                if spoken_text and source == "game":
+                    short = filters.shorten(spoken_text,
+                                            settings.GAME_MAX_WORDS)
+                    if short != spoken_text:
+                        print(f"[{_ts()}][worker] Too long, trimmed -> "
+                              f"{short[:80]}")
+                        spoken_text = short
+                        removed.append("trimmed_long")
+
                 # Enforced, not asked: the prompt's "already said" list did
                 # not stop an 18.8% echo rate. See persona/repeats.py.
                 if spoken_text and source in REPEAT_GUARDED:
