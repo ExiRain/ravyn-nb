@@ -126,6 +126,15 @@ def test_length_cap():
           clean("Hah. Rough.").text == "Hah. Rough.")
 
 
+def test_scores_in_brackets_are_said():
+    print("\n--- a score in brackets is content, not a stage direction ---")
+    r = clean("[10/5/0] is exactly what I expected from you.")
+    check("the score stays, unwrapped",
+          r.text == "10/5/0 is exactly what I expected from you.", r.text)
+    check("a real stage direction still goes",
+          clean("(sighs) Fine.").text == "Fine.")
+
+
 def test_game_lines_are_held_short():
     print("\n--- a game line is not a life story ---")
     long = ("Kayn got himself a Rift Herald, which is fine... assuming "
@@ -209,6 +218,7 @@ def main():
     test_instruction_leak()
     test_emoji_and_quotes()
     test_length_cap()
+    test_scores_in_brackets_are_said()
     test_game_lines_are_held_short()
     test_mood_tags_survive()
     test_tally_is_the_measurement()

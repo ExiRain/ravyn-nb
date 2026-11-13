@@ -445,7 +445,9 @@ def start_worker():
 
                 # Before the repeat check, so a phrase that is cut anyway
                 # does not cost her the whole line.
-                if spoken_text and source == "game":
+                # Idle thoughts too: after the games on 2026-11-12 her
+                # silence fillers ran to 40 words of musing about clouds.
+                if spoken_text and source in ("game", "silence_filler"):
                     short = filters.shorten(spoken_text,
                                             settings.GAME_MAX_WORDS)
                     if short != spoken_text:
